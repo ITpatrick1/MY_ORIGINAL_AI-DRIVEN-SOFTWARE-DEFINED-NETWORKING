@@ -21,11 +21,12 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $*"; }
 # ── 0. Clean previous run ────────────────────────────────────────────────────
 info "Cleaning previous Mininet state..."
 mn --clean 2>/dev/null | tail -1
-for port in 6653 9090 9091 9093 9095 9096; do fuser -k ${port}/tcp 2>/dev/null; done
+for port in 6653 9090 9091 9093 9095 9096 9097; do fuser -k ${port}/tcp 2>/dev/null; done
 pkill -f "ryu-manager" 2>/dev/null
 pkill -f "tumba_topo.py" 2>/dev/null
 pkill -f "pc_activity_manager.py" 2>/dev/null
 pkill -f "timetable_engine.py" 2>/dev/null
+pkill -f "auto_traffic.py" 2>/dev/null
 sleep 2
 
 # ── 1. Ryu SDN Controller ───────────────────────────────────────────────────
@@ -59,6 +60,13 @@ nohup "$PYTHON" "$PROJECT/tumba_sdn/simulation/pc_activity_manager.py" \
 sleep 3
 if ss -tlnp | grep -q ':9095'; then ok "PC Activity Manager running (port 9095)"; else fail "PCAM failed — see $LOGS/pcam.log"; fi
 
+# ── 4b. Autonomous Traffic Engine ────────────────────────────────────────────
+info "Starting Autonomous Traffic Engine (port 9097)..."
+nohup "$PYTHON" "$PROJECT/tumba_sdn/simulation/auto_traffic.py" \
+    > "$LOGS/auto_traffic.log" 2>&1 &
+sleep 2
+if ss -tlnp | grep -q ':9097'; then ok "Auto Traffic Engine running (port 9097)"; else fail "AutoTraffic failed — see $LOGS/auto_traffic.log"; fi
+
 # ── 5. ML Action Stub ───────────────────────────────────────────────────────
 info "Starting ML action stub..."
 nohup "$PYTHON" "$PROJECT/scripts/ml_stub.py" > "$LOGS/ml_stub.log" 2>&1 &
@@ -76,5 +84,6 @@ echo "  Tumba College SDN Stack — RUNNING"
 echo "  Dashboard:    http://localhost:9090"
 echo "  Topology API: http://localhost:9091"
 echo "  PCAM API:     http://localhost:9095"
+echo "  AutoTraffic:  http://localhost:9097"
 echo "  Logs:         $LOGS/"
 echo "────────────────────────────────────────────────────────────"

@@ -6,6 +6,7 @@
 <title>Tumba College SDN — Network Operations Center</title>
 <meta name="description" content="AI-Driven SDN monitoring dashboard for Tumba College of Technology">
 <script src="/static/js/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#0a0e1a;--surface:#111827;--surface2:#1a2035;--surface3:#1f2a44;--border:#2a3555;--txt:#e2e8f0;--dim:#64748b;--accent:#3b82f6;--green:#10d9a0;--red:#ef4444;--amber:#f59e0b;--purple:#a855f7;--cyan:#06b6d4;--r:12px}
@@ -145,6 +146,18 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 .bl-before{color:var(--amber);font-weight:600;min-width:60px;text-align:right}
 .bl-after{color:var(--green);font-weight:600;min-width:60px;text-align:right}
 .bl-delta{color:var(--accent);font-weight:700;min-width:50px;text-align:right}
+/* Alert dropdown */
+.alert-item{padding:8px 10px;border-radius:8px;margin-bottom:6px;border:1px solid var(--border);font-size:12px}
+.alert-item.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
+.alert-item.warning{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.alert-title{font-weight:700;margin-bottom:2px}
+.alert-detail{color:var(--dim);font-size:11px}
+.alert-ts{font-size:10px;color:var(--dim);margin-top:3px}
+/* Threat badge */
+.threat-badge{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1px solid}
+.threat-badge.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
+.threat-badge.warning{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.threat-badge.ok{border-color:rgba(16,217,160,.3);background:rgba(16,217,160,.06)}
 </style>
 </head>
 <body>
@@ -168,6 +181,13 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <header class="topbar">
 <h2 id="pageTitle">Overview</h2>
 <div class="badge ok" id="ctrlBadge"><span class="dot"></span>Controller</div>
+<div style="position:relative">
+  <button class="btn" id="btnAlerts" style="position:relative">🔔 Alerts <span id="alertBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:10px">0</span></button>
+  <div id="alertDropdown" style="display:none;position:absolute;right:0;top:38px;width:340px;background:var(--surface);border:1px solid var(--border);border-radius:10px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.6);max-height:380px;overflow-y:auto">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;justify-content:space-between"><span>Recent Alerts</span><button onclick="$('#alertDropdown').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">✕</button></div>
+    <div id="alertList" style="padding:8px"></div>
+  </div>
+</div>
 <button class="btn" id="btnPingall">Ping All</button>
 <button class="btn primary" id="btnRefresh">↺ Refresh</button>
 </header>
@@ -253,12 +273,29 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <!-- ANALYTICS -->
 <div class="page" id="pg-analytics">
 <div class="kpi-row">
-<div class="kpi b"><div class="kpi-label">Core Throughput</div><div class="kpi-value" id="anTput">—</div><div class="kpi-sub">Mbps</div></div>
+<div class="kpi b"><div class="kpi-label">Total Throughput</div><div class="kpi-value" id="anTput">—</div><div class="kpi-sub">Mbps all zones</div></div>
 <div class="kpi g"><div class="kpi-label">Latency Est.</div><div class="kpi-value" id="anLat">—</div><div class="kpi-sub">ms average</div></div>
-<div class="kpi a"><div class="kpi-label">Congested Ports</div><div class="kpi-value" id="anCong">—</div><div class="kpi-sub">active</div></div>
+<div class="kpi a"><div class="kpi-label">Congested Zones</div><div class="kpi-value" id="anCong">—</div><div class="kpi-sub">active congestion</div></div>
 <div class="kpi g"><div class="kpi-label">Flow Rules</div><div class="kpi-value" id="anFlows">—</div><div class="kpi-sub">installed</div></div>
 </div>
+<!-- Throughput chart -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Live Throughput — Per Zone (last 5 min)</span><span style="font-size:11px;color:var(--dim)" id="anSamples">0 samples</span></div>
+  <div class="card-body" style="padding:10px"><canvas id="chartThroughput" height="90"></canvas></div>
+</div>
 <div class="grid2">
+<!-- Utilisation chart -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Zone Utilisation % (EMA trend)</span></div>
+  <div class="card-body" style="padding:10px"><canvas id="chartUtil" height="120"></canvas></div>
+</div>
+<!-- AI Q-values chart -->
+<div class="card">
+  <div class="card-head"><span class="card-title">DQN Agent — Q-Values & Reward</span></div>
+  <div class="card-body" style="padding:10px"><canvas id="chartDqn" height="120"></canvas></div>
+</div>
+</div>
+<div class="grid2" style="margin-top:14px">
 <div class="card"><div class="card-head"><span class="card-title">Per-Zone Performance</span></div><div class="card-body"><pre class="log" id="anZone">Loading...</pre></div></div>
 <div class="card"><div class="card-head"><span class="card-title">DQN Agent Analysis</span></div><div class="card-body"><pre class="log" id="anDqn">Loading...</pre></div></div>
 </div>
@@ -266,19 +303,37 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 
 <!-- CONTROL -->
 <div class="page" id="pg-control">
-<div class="card" style="margin-bottom:20px"><div class="card-head"><span class="card-title">Traffic Scenario Simulator</span></div>
-<div class="card-body">
-<div class="scenario-grid" id="scenarioGrid">
-<button class="scenario-btn" data-sc="congestion">🌊 Congestion Test</button>
-<button class="scenario-btn" data-sc="ddos">⚡ DDoS Attack</button>
-<button class="scenario-btn" data-sc="link_failure">🔗 Link Failure</button>
-<button class="scenario-btn" data-sc="exam_mode">📝 Exam Mode</button>
-<button class="scenario-btn" data-sc="off_peak">🌙 Off-Peak</button>
-<button class="scenario-btn" data-sc="mixed">🔀 Mixed Scenario</button>
+<!-- Autonomous traffic engine controls -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">🤖 Autonomous Traffic Engine</span><span style="font-size:11px;color:var(--dim)" id="autoStatus">Checking...</span></div>
+  <div class="card-body">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn primary" id="btnAutoResume">▶ Resume Auto</button>
+      <button class="btn" id="btnAutoPause">⏸ Pause Auto</button>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Inject Demo Scenario (auto-reverts after timeout)</div>
+    <div class="scenario-grid" id="scenarioGrid">
+      <button class="scenario-btn" data-sc="exam">📝 Exam Mode</button>
+      <button class="scenario-btn" data-sc="congestion">🌊 Congestion Test</button>
+      <button class="scenario-btn" data-sc="ddos">⚡ DDoS Attack</button>
+      <button class="scenario-btn" data-sc="staff_heavy">🏢 Staff Heavy</button>
+      <button class="scenario-btn" data-sc="off_peak">🌙 Off-Peak</button>
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn primary" id="btnStartSc">▶ Inject</button><button class="btn danger" id="btnStopSc">■ Stop All</button></div>
+    <pre class="log" id="scLog" style="margin-top:12px">Select a scenario and click Inject.</pre>
+  </div>
 </div>
-<div style="display:flex;gap:8px"><button class="btn primary" id="btnStartSc">▶ Start</button><button class="btn danger" id="btnStopSc">■ Stop</button></div>
-<pre class="log" id="scLog" style="margin-top:12px">Select a scenario and click Start.</pre>
-</div></div>
+<!-- QoS status -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Network Policy Status</span></div>
+  <div class="card-body">
+    <div class="stat"><span class="stat-k">Exam Mode</span><span class="stat-v" id="ctrlExamMode">—</span></div>
+    <div class="stat"><span class="stat-k">Social Throttle</span><span class="stat-v" id="ctrlThrottle">—</span></div>
+    <div class="stat"><span class="stat-k">Congestion Predicted</span><span class="stat-v" id="ctrlPredicted">—</span></div>
+    <div class="stat"><span class="stat-k">Last DQN Action</span><span class="stat-v b" id="ctrlLastAction">—</span></div>
+    <div class="stat"><span class="stat-k">Timetable Period</span><span class="stat-v" id="ctrlPeriod">—</span></div>
+  </div>
+</div>
 </div>
 
 <!-- SECURITY -->
@@ -287,8 +342,30 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <div class="kpi g"><div class="kpi-label">Security Status</div><div class="kpi-value" id="secStatus">—</div><div class="kpi-sub" id="secSub">Zero-Trust active</div></div>
 <div class="kpi r"><div class="kpi-label">Blocked Flows</div><div class="kpi-value" id="secBlocked">—</div><div class="kpi-sub">total blocked</div></div>
 <div class="kpi a"><div class="kpi-label">DDoS Status</div><div class="kpi-value" id="secDdos">—</div><div class="kpi-sub" id="secDdosSub">monitoring</div></div>
+<div class="kpi b"><div class="kpi-label">Congestion Alerts</div><div class="kpi-value" id="secCongPred">—</div><div class="kpi-sub">predicted zones</div></div>
 </div>
-<div class="card"><div class="card-head"><span class="card-title">Security Event Log</span></div><div class="card-body"><pre class="log" id="secLog">Loading security events...</pre></div></div>
+<div class="grid2">
+<div class="card">
+  <div class="card-head"><span class="card-title">Active Threats</span></div>
+  <div class="card-body" id="secThreats">
+    <div style="color:var(--dim);font-size:12px">Monitoring...</div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-head"><span class="card-title">Zero-Trust Policy</span></div>
+  <div class="card-body">
+    <div class="stat"><span class="stat-k">Student WiFi → Staff LAN</span><span class="stat-v r">BLOCKED</span></div>
+    <div class="stat"><span class="stat-k">Staff → Server Zone (80,443)</span><span class="stat-v g">ALLOWED</span></div>
+    <div class="stat"><span class="stat-k">Lab → Server Zone (80,443,22)</span><span class="stat-v g">ALLOWED</span></div>
+    <div class="stat"><span class="stat-k">WiFi → Server Zone (80,443)</span><span class="stat-v g">ALLOWED</span></div>
+    <div class="stat"><span class="stat-k">ARP Spoofing Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">MAC Flood Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">DDoS Auto-block</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Exam Mode</span><span class="stat-v b" id="secExamMode">OFF</span></div>
+  </div>
+</div>
+</div>
+<div class="card" style="margin-top:14px"><div class="card-head"><span class="card-title">Security Event Log</span></div><div class="card-body"><pre class="log" id="secLog">Loading security events...</pre></div></div>
 </div>
 
 <!-- LOGS -->
@@ -1177,12 +1254,235 @@ function hexToRgb(hex) {
   return `${r},${g},${b}`;
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  CHART.JS — Analytics charts
+// ═══════════════════════════════════════════════════════════════
+const ZONE_COLORS = {
+  staff_lan:    '#10d9a0',
+  server_zone:  '#06b6d4',
+  it_lab:       '#a855f7',
+  student_wifi: '#f59e0b',
+};
+const CHART_OPTS = {
+  responsive: true, animation: false,
+  plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#475569', font:{size:9}, maxTicksLimit:8 }, grid: { color:'rgba(42,53,85,.4)' } },
+    y: { ticks: { color: '#475569', font:{size:10} }, grid: { color:'rgba(42,53,85,.4)' } },
+  },
+};
+
+let chartTput, chartUtil, chartDqn;
+
+function initCharts() {
+  const zones = ['staff_lan','server_zone','it_lab','student_wifi'];
+  const labels = ['Staff LAN','Server Zone','IT Lab','Student WiFi'];
+
+  chartTput = new Chart($('#chartThroughput'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: zones.map((z, i) => ({
+        label: labels[i], data: [], borderColor: ZONE_COLORS[z],
+        backgroundColor: ZONE_COLORS[z]+'22', fill: true,
+        tension: 0.4, pointRadius: 1, borderWidth: 2,
+      })),
+    },
+    options: {...CHART_OPTS, scales: {...CHART_OPTS.scales,
+      y: {...CHART_OPTS.scales.y, title:{display:true,text:'Mbps',color:'#475569'}}}},
+  });
+
+  chartUtil = new Chart($('#chartUtil'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: zones.map((z, i) => ({
+        label: labels[i], data: [], borderColor: ZONE_COLORS[z],
+        backgroundColor: 'transparent', tension: 0.4, pointRadius: 1, borderWidth: 2,
+      })),
+    },
+    options: {...CHART_OPTS, scales: {...CHART_OPTS.scales,
+      y: {...CHART_OPTS.scales.y, min:0, max:100,
+          title:{display:true,text:'%',color:'#475569'}}}},
+  });
+
+  chartDqn = new Chart($('#chartDqn'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {label:'Reward', data:[], borderColor:'#10d9a0', backgroundColor:'#10d9a022', fill:true, tension:0.4, pointRadius:1, borderWidth:2},
+        {label:'Epsilon×10', data:[], borderColor:'#f59e0b', backgroundColor:'transparent', tension:0.4, pointRadius:1, borderWidth:1.5, borderDash:[4,4]},
+      ],
+    },
+    options: {...CHART_OPTS, scales: {...CHART_OPTS.scales,
+      y: {...CHART_OPTS.scales.y, title:{display:true,text:'Value',color:'#475569'}}}},
+  });
+}
+
+function updateCharts(samples) {
+  if (!chartTput || !samples || samples.length === 0) return;
+  const zones = ['staff_lan','server_zone','it_lab','student_wifi'];
+  const labels = samples.map(s => new Date(s.ts*1000).toLocaleTimeString());
+
+  // Throughput
+  chartTput.data.labels = labels;
+  zones.forEach((z, i) => {
+    chartTput.data.datasets[i].data = samples.map(s => (s.zones[z]?.throughput_mbps||0).toFixed(2));
+  });
+  chartTput.update('none');
+
+  // Utilisation
+  chartUtil.data.labels = labels;
+  zones.forEach((z, i) => {
+    chartUtil.data.datasets[i].data = samples.map(s => (s.zones[z]?.max_utilization_pct||0).toFixed(1));
+  });
+  chartUtil.update('none');
+
+  // DQN
+  chartDqn.data.labels = labels;
+  chartDqn.data.datasets[0].data = samples.map(s => (s.reward||0).toFixed(3));
+  chartDqn.data.datasets[1].data = samples.map(s => ((s.epsilon||0)*10).toFixed(3));
+  chartDqn.update('none');
+
+  $('#anSamples').textContent = `${samples.length} samples`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ALERTS
+// ═══════════════════════════════════════════════════════════════
+let _alertCount = 0;
+
+function refreshAlerts() {
+  fetch('/api/alerts').then(r=>r.json()).then(d=>{
+    const alerts = d.alerts || [];
+    const newCount = d.count || 0;
+    if (newCount > _alertCount) {
+      $('#alertBadge').style.display = 'block';
+      $('#alertBadge').textContent   = Math.min(99, newCount - _alertCount);
+    }
+    _alertCount = newCount;
+    renderAlertList(alerts);
+    // Security threats pane
+    renderThreats(alerts);
+  }).catch(()=>{});
+}
+
+function renderAlertList(alerts) {
+  if (!alerts.length) {
+    $('#alertList').innerHTML = '<div style="color:var(--dim);font-size:12px;padding:8px">No recent alerts</div>';
+    return;
+  }
+  $('#alertList').innerHTML = alerts.slice(-10).reverse().map(a => `
+    <div class="alert-item ${a.severity}">
+      <div class="alert-title" style="color:${a.severity==='critical'?'var(--red)':'var(--amber)'}">${a.severity==='critical'?'🔴':'🟡'} ${a.title}</div>
+      <div class="alert-detail">${a.detail}</div>
+      <div class="alert-ts">${new Date(a.ts*1000).toLocaleTimeString()}</div>
+    </div>`).join('');
+}
+
+function renderThreats(alerts) {
+  const el = $('#secThreats'); if (!el) return;
+  const critical = alerts.filter(a=>a.severity==='critical').slice(-5);
+  const warnings = alerts.filter(a=>a.severity==='warning').slice(-3);
+  if (!critical.length && !warnings.length) {
+    el.innerHTML = '<div class="threat-badge ok"><span>✓</span><span style="font-size:12px">No active threats detected</span></div>';
+    return;
+  }
+  el.innerHTML = [...critical,...warnings].slice(-6).reverse().map(a=>`
+    <div class="threat-badge ${a.severity}">
+      <span>${a.severity==='critical'?'🔴':'🟡'}</span>
+      <div><div style="font-size:12px;font-weight:700">${a.title}</div><div style="font-size:11px;color:var(--dim)">${a.detail}</div></div>
+    </div>`).join('');
+}
+
+$('#btnAlerts').addEventListener('click', () => {
+  const d = $('#alertDropdown');
+  d.style.display = d.style.display === 'none' ? 'block' : 'none';
+  $('#alertBadge').style.display = 'none';
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  AUTO TRAFFIC ENGINE controls
+// ═══════════════════════════════════════════════════════════════
+function refreshAutoTraffic() {
+  fetch('/api/auto_traffic').then(r=>r.json()).then(d=>{
+    if (!d || !d.ts) return;
+    const el = $('#autoStatus');
+    if (el) el.textContent = d.paused ? '⏸ Paused' : (d.scenario_active ? `▶ Scenario: ${d.scenario}` : '▶ Autonomous');
+  }).catch(()=>{});
+}
+
+$('#btnAutoResume').addEventListener('click', () => {
+  fetch('/api/auto_traffic/resume',{method:'POST'}).then(r=>r.json())
+    .then(()=>{ $('#scLog').textContent='[AutoTraffic] Resumed autonomous mode'; refreshAutoTraffic(); })
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+$('#btnAutoPause').addEventListener('click', () => {
+  fetch('/api/auto_traffic/pause',{method:'POST'}).then(r=>r.json())
+    .then(()=>{ $('#scLog').textContent='[AutoTraffic] Paused'; refreshAutoTraffic(); })
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SECURITY page updater
+// ═══════════════════════════════════════════════════════════════
+function refreshSecurity() {
+  fetch('/api/security').then(r=>r.json()).then(sec=>{
+    $('#secStatus').textContent = sec.ddos_active ? '⚠ ALERT' : '✓ Secure';
+    $('#secBlocked').textContent = sec.security_blocked || 0;
+    $('#secDdos').textContent  = sec.ddos_active ? 'ACTIVE' : 'Clear';
+    if ($('#secExamMode')) $('#secExamMode').textContent = sec.exam_mode ? 'ON' : 'OFF';
+    // Congestion predictions
+    const cp = sec.congestion_predicted || {};
+    const predicted = Object.entries(cp).filter(([,v])=>v).map(([z])=>z.replace(/_/g,' '));
+    if ($('#secCongPred')) $('#secCongPred').textContent = predicted.length || 0;
+    // Event log
+    const evts = sec.security_events || sec.events || [];
+    if ($('#secLog')) $('#secLog').textContent = evts.length
+      ? evts.slice(-20).reverse().map(e=>`[${new Date(e.ts*1000).toLocaleTimeString()}] ${e.event}${e.src_ip?' src='+e.src_ip:''}${e.zone?' zone='+e.zone:''}`).join('\n')
+      : 'No security events.';
+  }).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONTROL CENTER policy status
+// ═══════════════════════════════════════════════════════════════
+function refreshControlCenter(m, ml, tt) {
+  if ($('#ctrlExamMode'))   $('#ctrlExamMode').textContent  = m.exam_mode    ? '✅ ACTIVE' : '—';
+  if ($('#ctrlThrottle'))   $('#ctrlThrottle').textContent  = m.throttle_active ? '✅ ACTIVE' : '—';
+  if ($('#ctrlLastAction')) $('#ctrlLastAction').textContent = ml.action || '—';
+  if ($('#ctrlPeriod'))     $('#ctrlPeriod').textContent    = tt.period || '—';
+  const cp = m.congestion_predicted || {};
+  const zones = Object.entries(cp).filter(([,v])=>v).map(([z])=>z.replace(/_/g,' '));
+  if ($('#ctrlPredicted')) $('#ctrlPredicted').textContent = zones.length ? zones.join(', ') : '✓ None';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HISTORY — fetch and update charts
+// ═══════════════════════════════════════════════════════════════
+function refreshHistory() {
+  fetch('/api/history').then(r=>r.json()).then(d=>{
+    updateCharts(d.samples || []);
+  }).catch(()=>{});
+}
+
 // ─── STARTUP — all const/let declarations above are initialized by this point ───
+initCharts();
 setInterval(()=>drawTopology(null), 800);
 drawTopology(null);
 refresh();
 setInterval(refresh, 2000);
-$('#btnRefresh').addEventListener('click', refresh);
+setInterval(refreshAlerts, 5000);
+setInterval(refreshHistory, 6000);
+setInterval(refreshAutoTraffic, 8000);
+setInterval(refreshSecurity, 4000);
+refreshAlerts();
+refreshHistory();
+refreshAutoTraffic();
+refreshSecurity();
+
+$('#btnRefresh').addEventListener('click', () => { refresh(); refreshAlerts(); refreshHistory(); refreshSecurity(); });
 $('#btnPingall').addEventListener('click', () => {
   fetch('/api/pingall',{method:'POST'})
     .then(r=>r.json()).then(d=>{
