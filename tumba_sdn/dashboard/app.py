@@ -187,10 +187,12 @@ def api_threats():
     m      = _read(METRICS)
     threats = []
     if m.get('ddos_active'):
+        zones = m.get('ddos_zones', [])
         threats.append({
             'type': 'ddos', 'severity': 'critical',
             'title': 'DDoS Attack Active',
-            'detail': f"Blocked {m.get('security_blocked', 0)} flows",
+            'zone':  zones[0] if zones else 'unknown',
+            'detail': f"Zone: {', '.join(zones) or 'unknown'} · blocked {m.get('security_blocked', 0)} flows",
             'blocked': True,
         })
     for s in m.get('active_scans', []):

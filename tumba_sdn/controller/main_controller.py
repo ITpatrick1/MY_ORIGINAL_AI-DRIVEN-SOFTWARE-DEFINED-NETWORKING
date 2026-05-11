@@ -46,6 +46,11 @@ SCAN_PORT_THRESHOLD = 12   # distinct dst ports in window → port scan
 SCAN_IP_THRESHOLD   = 5    # distinct dst IPs in window → network sweep
 SCAN_WINDOW_S       = 30   # seconds
 
+# DDoS detection — sustained high PPS from any single zone
+DDOS_PPS_THRESHOLD  = 2000  # packets/sec on a zone → DDoS suspected
+DDOS_CLEAR_PPS      = 500   # PPS must drop below this to clear DDoS state
+BLOCKED_IP_TTL_S    = 120   # seconds before a blocked IP is auto-released
+
 # Latency base values per zone (ms) — increases with congestion
 ZONE_BASE_LATENCY_MS = {
     'staff_lan':    4.0,
@@ -91,7 +96,8 @@ class CampusController(app_manager.RyuApp):
         self.ip_to_mac          = {}     # {ip: mac}  for ARP spoofing detection
         self.port_mac_count     = defaultdict(set)   # {(dpid,port): set of MACs}
         self.blocked_macs       = set()
-        self.blocked_ips        = set()  # IPs blocked by scan detection
+        self.blocked_ips        = {}     # {ip: blocked_at_ts} — auto-expire after TTL
+        self.ddos_zone          = None   # currently DDoS-affected zone
 
         # ── Security: Port scan / network sweep detection ──
         # {src_ip: {ports: {dst_ip: set()}, ips: set(), ts: float, port_notified: bool, sweep_notified: bool}}
@@ -213,7 +219,7 @@ class CampusController(app_manager.RyuApp):
             dst_ip = ip_pkt.dst
             now    = time.time()
 
-            # Drop traffic from IPs already identified as scanners
+            # Drop traffic from IPs already identified as scanners (if TTL not expired)
             if src_ip in self.blocked_ips:
                 return
 
@@ -242,7 +248,7 @@ class CampusController(app_manager.RyuApp):
                                        confidence=confidence,
                                        pps=round(tr['pps'], 1))
                     self.security_blocked += 1
-                    self.blocked_ips.add(src_ip)
+                    self.blocked_ips[src_ip] = time.time()
                     # Install drop rule for scanner IP
                     match = parser.OFPMatch(
                         eth_type=ether_types.ETH_TYPE_IP,
@@ -328,7 +334,55 @@ class CampusController(app_manager.RyuApp):
             self._load_timetable()
             self._apply_timetable_qos()
             self._apply_ml_action()
+            self._detect_ddos()
+            self._cleanup_security_state()
             hub.sleep(2)
+
+    def _detect_ddos(self):
+        """Detect DDoS by sustained high PPS on any zone — auto-block and auto-clear."""
+        for zone, zdpid in ZONE_DPID.items():
+            ports     = [(d, p) for (d, p) in self.port_stats if d == zdpid]
+            total_pps = sum(self.port_stats.get(k, {}).get('pps', 0) for k in ports)
+            was_ddos  = bool(self.ddos_blocked_ips)
+
+            if total_pps > DDOS_PPS_THRESHOLD:
+                if zone not in self.ddos_blocked_ips:
+                    self.ddos_blocked_ips[zone] = {
+                        'ts': time.time(), 'pps': round(total_pps, 1), 'zone': zone
+                    }
+                    self.security_blocked += 1
+                    self._append_event('ddos_detected', zone=zone, pps=round(total_pps, 1))
+                    self.logger.warning('DDoS detected: zone=%s pps=%.0f', zone, total_pps)
+                    # Install high-priority drop for flooding source zone
+                    src_net = ZONE_SUBNETS.get(zone, '10.40.0.')
+                    for dp in list(self.datapaths.values()):
+                        parser = dp.ofproto_parser
+                        ofp    = dp.ofproto
+                        match  = parser.OFPMatch(
+                            eth_type=ether_types.ETH_TYPE_IP,
+                            ipv4_src=(src_net + '0', '255.255.255.0'),
+                            ip_proto=6, tcp_dst=80,
+                        )
+                        self._add_flow(dp, 480, match, [],
+                                       cookie=SCAN_BLOCK_COOKIE, hard_timeout=60)
+            else:
+                if zone in self.ddos_blocked_ips and total_pps < DDOS_CLEAR_PPS:
+                    del self.ddos_blocked_ips[zone]
+                    if not self.ddos_blocked_ips:
+                        self._append_event('ddos_cleared', zone=zone)
+                        self.logger.info('DDoS cleared for zone=%s', zone)
+
+    def _cleanup_security_state(self):
+        """Expire blocked IPs after TTL, prune old scan_tracker entries."""
+        now = time.time()
+        # Expire blocked IPs
+        expired = [ip for ip, ts in self.blocked_ips.items() if now - ts > BLOCKED_IP_TTL_S]
+        for ip in expired:
+            del self.blocked_ips[ip]
+        # Prune scan_tracker entries older than 2× window
+        old = [ip for ip, tr in self.scan_tracker.items() if now - tr['ts'] > SCAN_WINDOW_S * 2]
+        for ip in old:
+            del self.scan_tracker[ip]
 
     # ─────────────────────────── Congestion prediction ────────────────────────
 
@@ -634,6 +688,7 @@ class CampusController(app_manager.RyuApp):
                     'pps':           round(tr['pps'], 1),
                     'type':          'port_scan' if tr['port_notified'] else 'network_sweep',
                     'ts':            tr['ts'],
+                    'blocked':       src_ip in self.blocked_ips,
                 })
 
         payload = {
@@ -648,8 +703,9 @@ class CampusController(app_manager.RyuApp):
             'events':               self.ctrl_events[-50:],
             'security_events':      sec_events,
             'ddos_active':          bool(self.ddos_blocked_ips),
+            'ddos_zones':           list(self.ddos_blocked_ips.keys()),
             'security_blocked':     self.security_blocked,
-            'blocked_ips':          list(self.blocked_ips),
+            'blocked_ips':          list(self.blocked_ips.keys()),
             'active_scans':         active_scans,
             'exam_mode':            self.exam_mode_active,
             'throttle_active':      self.throttle_active,
