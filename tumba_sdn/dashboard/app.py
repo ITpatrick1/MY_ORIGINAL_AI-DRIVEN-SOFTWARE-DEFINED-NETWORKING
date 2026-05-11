@@ -113,7 +113,7 @@ def _check_alerts(m: dict, ml: dict):
                    f'reward={ml.get("reward",0):.2f} ε={ml.get("epsilon",0):.3f}')
 
     sec_evts = m.get('security_events', [])
-    for evt in sec_evts[-3:]:
+    for evt in sec_evts[-5:]:
         if evt.get('event') == 'arp_spoofing_detected':
             _add_alert('critical', 'ARP Spoofing Detected',
                        f"IP {evt.get('ip')} — spoof MAC {evt.get('spoof_mac')}")
@@ -121,6 +121,14 @@ def _check_alerts(m: dict, ml: dict):
             _add_alert('critical', 'MAC Flooding Detected',
                        f"dpid={evt.get('dpid')} port={evt.get('port')} "
                        f"{evt.get('mac_count',0)} MACs")
+        elif evt.get('event') == 'port_scan_detected':
+            _add_alert('critical', f'Port Scan — {evt.get("zone","?")}',
+                       f"src={evt.get('src_ip')} {evt.get('ports_scanned',0)} ports "
+                       f"@ {evt.get('pps',0):.1f} pps · confidence {evt.get('confidence',0)}%")
+        elif evt.get('event') == 'network_sweep_detected':
+            _add_alert('warning', f'Network Sweep — {evt.get("zone","?")}',
+                       f"src={evt.get('src_ip')} probed {evt.get('ip_count',0)} IPs "
+                       f"· confidence {evt.get('confidence',0)}%")
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
@@ -161,8 +169,59 @@ def api_security():
         'throttle_active':  m.get('throttle_active', False),
         'congestion_predicted': m.get('congestion_predicted', {}),
         'security_events':  m.get('security_events', []),
+        'active_scans':     m.get('active_scans', []),
+        'blocked_ips':      m.get('blocked_ips', []),
         'events':           m.get('events', [])[-30:],
     })
+
+@app.route('/api/flows')
+def api_flows():
+    """Live flow table built from PC Activities + controller metrics."""
+    m    = _read(METRICS)
+    flows = m.get('top_flows', [])
+    return jsonify({'flows': flows, 'count': len(flows)})
+
+@app.route('/api/threats')
+def api_threats():
+    """Active threat summary: scans, DDoS, spoofing."""
+    m      = _read(METRICS)
+    threats = []
+    if m.get('ddos_active'):
+        threats.append({
+            'type': 'ddos', 'severity': 'critical',
+            'title': 'DDoS Attack Active',
+            'detail': f"Blocked {m.get('security_blocked', 0)} flows",
+            'blocked': True,
+        })
+    for s in m.get('active_scans', []):
+        t = 'Port Scan' if s.get('type') == 'port_scan' else 'Network Sweep'
+        threats.append({
+            'type': s.get('type'),
+            'severity': 'critical',
+            'title': f'{t} Detected',
+            'src_ip':    s.get('src_ip'),
+            'zone':      s.get('zone'),
+            'detail':    f"{s.get('ports_scanned', 0)} ports / {s.get('ips_probed', 0)} IPs @ {s.get('pps', 0):.1f} pps",
+            'confidence': min(99, int((s.get('ports_scanned', 0) or s.get('ips_probed', 0)) * 4)),
+            'blocked': s.get('src_ip', '') in m.get('blocked_ips', []),
+        })
+    for evt in m.get('security_events', []):
+        if evt.get('event') == 'arp_spoofing_detected':
+            threats.append({
+                'type': 'arp_spoof', 'severity': 'critical',
+                'title': 'ARP Spoofing',
+                'src_ip': evt.get('ip'),
+                'detail': f"Spoof MAC {evt.get('spoof_mac')}",
+                'confidence': 95, 'blocked': True,
+            })
+        elif evt.get('event') == 'mac_flooding_detected':
+            threats.append({
+                'type': 'mac_flood', 'severity': 'warning',
+                'title': 'MAC Flooding',
+                'detail': f"dpid={evt.get('dpid')} port={evt.get('port')} {evt.get('mac_count',0)} MACs",
+                'confidence': 90, 'blocked': False,
+            })
+    return jsonify({'threats': threats[:10], 'count': len(threats)})
 
 @app.route('/api/history')
 def api_history():

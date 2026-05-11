@@ -159,6 +159,36 @@ ACTIVITY_PROFILES = {
         'icon':         '!',
         'description':  'Security scenario: simulated DDoS from this PC',
     },
+    'port_scan': {
+        'label':        'Port Scan (Nmap)',
+        'priority':     0,
+        'dscp':         0,
+        'bandwidth_mbps': 0.5,
+        'dst_ip':       '10.20.0.0',  # scans server subnet
+        'dst_port':     0,            # varies per scan
+        'proto':        'tcp',
+        'pattern':      'scan',
+        'burst_dur':    20,
+        'burst_gap':    5,
+        'color':        '#f97316',
+        'icon':         'S',
+        'description':  'Security scenario: TCP SYN port scan across server zone',
+    },
+    'network_sweep': {
+        'label':        'Network Sweep (ICMP)',
+        'priority':     0,
+        'dscp':         0,
+        'bandwidth_mbps': 0.1,
+        'dst_ip':       '10.0.0.0',   # sweeps all subnets
+        'dst_port':     0,
+        'proto':        'icmp',
+        'pattern':      'sweep',
+        'burst_dur':    15,
+        'burst_gap':    10,
+        'color':        '#fb923c',
+        'icon':         'W',
+        'description':  'Security scenario: ICMP ping sweep to discover live hosts',
+    },
 }
 
 # Priority label for display
@@ -266,16 +296,19 @@ class PCActivityManager:
                 profile = ACTIVITY_PROFILES[act]
                 pcs[host] = {
                     **meta,
-                    'activity':      act,
+                    'activity':       act,
                     'activity_label': profile['label'],
-                    'priority':      profile['priority'],
+                    'priority':       profile['priority'],
                     'priority_label': PRIORITY_LABELS[profile['priority']],
-                    'dscp':          profile['dscp'],
-                    'traffic_mbps':  round(self._traffic_mbps[host], 2),
-                    'since_ts':      self._since_ts[host],
-                    'color':         profile['color'],
-                    'icon':          profile['icon'],
-                    'bw_target':     profile['bandwidth_mbps'],
+                    'dscp':           profile['dscp'],
+                    'traffic_mbps':   round(self._traffic_mbps[host], 2),
+                    'since_ts':       self._since_ts[host],
+                    'color':          profile['color'],
+                    'icon':           profile['icon'],
+                    'bw_target':      profile['bandwidth_mbps'],
+                    'dst_ip':         profile.get('dst_ip', ''),
+                    'dst_port':       profile.get('dst_port', 0),
+                    'proto':          profile.get('proto', 'tcp'),
                 }
 
         baseline = {}
@@ -386,15 +419,20 @@ class PCActivityManager:
                 if self._activity.get(host) != activity:
                     break
 
-            measured = self._run_iperf(host, dst_ip, dst_port, proto,
-                                       bw_mbps, burst_dur)
+            if pattern == 'scan':
+                measured = self._run_port_scan(host, stop_event)
+            elif pattern == 'sweep':
+                measured = self._run_network_sweep(host, stop_event)
+            else:
+                measured = self._run_iperf(host, dst_ip, dst_port, proto,
+                                           bw_mbps, burst_dur)
             with self._lock:
                 if self._activity.get(host) == activity:
                     self._traffic_mbps[host] = measured
                     self._pkts_sent[host] += 1
 
             # Gap between bursts (skip for stream/flood patterns)
-            if burst_gap > 0 and pattern not in ('stream', 'flood'):
+            if burst_gap > 0 and pattern not in ('stream', 'flood', 'scan', 'sweep'):
                 stop_event.wait(timeout=burst_gap)
 
         # Zero out traffic on exit
@@ -440,6 +478,56 @@ class PCActivityManager:
             pass
         # Return target if we couldn't measure (namespace not yet ready, etc.)
         return bw_mbps * 0.8
+
+    def _run_port_scan(self, host: str, stop_event: threading.Event) -> float:
+        """Simulate TCP SYN port scan — probes sequential ports on server zone.
+        Each nc -z sends a TCP SYN, triggering controller packet_in for detection."""
+        import random
+        targets = ['10.20.0.1', '10.20.0.4', '10.10.0.1', '10.30.0.1']
+        ports   = list(range(20, 140))  # 120 ports
+        random.shuffle(ports)
+        probed = 0
+        for port in ports:
+            if stop_event.is_set():
+                break
+            target = random.choice(targets)
+            cmd = [
+                'sudo', 'ip', 'netns', 'exec', host,
+                'bash', '-c',
+                f'echo "" | nc -w 0 -z {target} {port} 2>/dev/null; true',
+            ]
+            try:
+                subprocess.run(cmd, timeout=1, capture_output=True)
+                probed += 1
+            except Exception:
+                pass
+        print(f'[pcam] {host}: port scan — {probed} ports probed')
+        stop_event.wait(timeout=5)
+        return 0.4
+
+    def _run_network_sweep(self, host: str, stop_event: threading.Event) -> float:
+        """Simulate ICMP network sweep — pings across all campus subnets."""
+        targets = (
+            [f'10.10.0.{i}' for i in range(1, 5)] +
+            [f'10.20.0.{i}' for i in range(1, 5)] +
+            [f'10.30.0.{i}' for i in range(1, 5)] +
+            [f'10.40.0.{i}' for i in range(1, 6)]
+        )
+        alive = 0
+        for ip in targets:
+            if stop_event.is_set():
+                break
+            cmd = ['sudo', 'ip', 'netns', 'exec', host,
+                   'ping', '-c', '1', '-W', '1', ip]
+            try:
+                r = subprocess.run(cmd, timeout=2, capture_output=True)
+                if r.returncode == 0:
+                    alive += 1
+            except Exception:
+                pass
+        print(f'[pcam] {host}: network sweep — {alive}/{len(targets)} hosts alive')
+        stop_event.wait(timeout=10)
+        return 0.1
 
     def _state_writer(self):
         """Background thread: writes state file every 2 seconds."""

@@ -80,6 +80,9 @@ PROFILES = {
         'student': {'idle': 55, 'social_media': 30, 'video_streaming': 15},
     },
 }
+
+# Small chance a student PC performs a port scan during any period (for detection demo)
+SCAN_PROBABILITY = 0.04   # 4% chance per cycle
 # Fall back to this if timetable period not found
 DEFAULT_PERIOD  = 'evening_study'
 
@@ -119,6 +122,14 @@ SCENARIOS = {
         'overrides': {
             'h_staff1': 'video_conf', 'h_staff2': 'video_conf', 'h_staff3': 'file_download',
             'h_lab1': 'elearning', 'h_lab2': 'elearning',
+        },
+    },
+    'scanning': {
+        'duration_s': 60,
+        'overrides': {
+            'h_wifi3': 'port_scan', 'h_wifi4': 'network_sweep',
+            'h_lab3':  'port_scan',
+            'h_staff1': 'elearning', 'h_staff2': 'video_conf',
         },
     },
 }
@@ -249,6 +260,10 @@ class AutoTrafficEngine:
             # Small chance of a random congestion spike on WiFi
             if pc['zone'] == 'student_wifi' and random.random() < 0.08:
                 activity = random.choice(['file_download', 'video_streaming'])
+
+            # Rare port scan / sweep from student zones (anomaly injection)
+            if pc['zone'] in ('student_wifi', 'it_lab') and random.random() < SCAN_PROBABILITY:
+                activity = random.choice(['port_scan', 'network_sweep'])
 
             # Only push if changed
             if activity != self.pc_activity.get(pid):

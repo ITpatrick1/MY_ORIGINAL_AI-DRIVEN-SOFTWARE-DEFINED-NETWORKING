@@ -202,13 +202,23 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <div class="kpi g" id="kpiSec"><div class="kpi-label">Security</div><div class="kpi-value" id="kvSec">—</div><div class="kpi-sub" id="ksSec">Zero-Trust status</div></div>
 </div>
 <div class="grid3">
-<div class="card"><div class="card-head"><span class="card-title">Zone Metrics</span></div><div class="card-body"><table class="zone-table"><thead><tr><th>Zone</th><th>Throughput</th><th>Utilization</th><th>Status</th></tr></thead><tbody id="zoneTable"></tbody></table></div></div>
-<div class="card"><div class="card-head"><span class="card-title">AI Routing Decision</span></div><div class="card-body"><pre class="log" id="aiPane">Loading AI state...</pre></div></div>
-<div class="card"><div class="card-head"><span class="card-title">Alerts & Events</span></div><div class="card-body"><pre class="log" id="alertPane">No active alerts.</pre></div></div>
+<div class="card"><div class="card-head"><span class="card-title">Zone Metrics</span><span style="font-size:10px;color:var(--dim)">+ latency/loss estimated from utilization</span></div><div class="card-body"><table class="zone-table"><thead><tr><th>Zone</th><th>Throughput</th><th>Util %</th><th>Latency</th><th>Loss</th><th>Status</th></tr></thead><tbody id="zoneTable"></tbody></table></div></div>
+<div class="card"><div class="card-head"><span class="card-title">AI Routing Decision</span><span style="font-size:10px;color:var(--dim)">DQN reward breakdown</span></div><div class="card-body"><pre class="log" id="aiPane">Loading AI state...</pre></div></div>
+<div class="card"><div class="card-head"><span class="card-title">Alerts &amp; Events</span></div><div class="card-body"><pre class="log" id="alertPane">No active alerts.</pre></div></div>
 </div>
 <div class="grid2">
 <div class="card"><div class="card-head"><span class="card-title">Link Utilization</span></div><div class="card-body" id="linkBars">No data</div></div>
 <div class="card"><div class="card-head"><span class="card-title">Timetable State</span></div><div class="card-body"><pre class="log" id="ttPane">Loading timetable...</pre></div></div>
+</div>
+<!-- Live Flows -->
+<div class="card" style="margin-top:14px">
+  <div class="card-head"><span class="card-title">Live Flows — Top Active Connections</span><span style="font-size:11px;color:var(--dim)" id="flowCount">0 active</span></div>
+  <div class="card-body" style="overflow-x:auto">
+    <table class="zone-table" style="min-width:680px">
+      <thead><tr><th>Source</th><th>→ Destination</th><th>Proto</th><th>Activity</th><th>Bandwidth</th><th>Priority</th><th>DSCP</th></tr></thead>
+      <tbody id="flowTbody"><tr><td colspan="7" style="color:var(--dim)">Loading flows...</td></tr></tbody>
+    </table>
+  </div>
 </div>
 </div>
 
@@ -316,6 +326,7 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
       <button class="scenario-btn" data-sc="exam">📝 Exam Mode</button>
       <button class="scenario-btn" data-sc="congestion">🌊 Congestion Test</button>
       <button class="scenario-btn" data-sc="ddos">⚡ DDoS Attack</button>
+      <button class="scenario-btn" data-sc="scanning">🔍 Port Scan / Sweep</button>
       <button class="scenario-btn" data-sc="staff_heavy">🏢 Staff Heavy</button>
       <button class="scenario-btn" data-sc="off_peak">🌙 Off-Peak</button>
     </div>
@@ -340,9 +351,9 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <div class="page" id="pg-security">
 <div class="kpi-row">
 <div class="kpi g"><div class="kpi-label">Security Status</div><div class="kpi-value" id="secStatus">—</div><div class="kpi-sub" id="secSub">Zero-Trust active</div></div>
-<div class="kpi r"><div class="kpi-label">Blocked Flows</div><div class="kpi-value" id="secBlocked">—</div><div class="kpi-sub">total blocked</div></div>
-<div class="kpi a"><div class="kpi-label">DDoS Status</div><div class="kpi-value" id="secDdos">—</div><div class="kpi-sub" id="secDdosSub">monitoring</div></div>
-<div class="kpi b"><div class="kpi-label">Congestion Alerts</div><div class="kpi-value" id="secCongPred">—</div><div class="kpi-sub">predicted zones</div></div>
+<div class="kpi r"><div class="kpi-label">Blocked Flows</div><div class="kpi-value" id="secBlocked">—</div><div class="kpi-sub" id="secBlockedIPs">0 IPs blocked</div></div>
+<div class="kpi a"><div class="kpi-label">DDoS / Scan</div><div class="kpi-value" id="secDdos">—</div><div class="kpi-sub" id="secDdosSub">monitoring</div></div>
+<div class="kpi b"><div class="kpi-label">Active Threats</div><div class="kpi-value" id="secCongPred">—</div><div class="kpi-sub" id="secThreatSub">scan/ddos/arp</div></div>
 </div>
 <div class="grid2">
 <div class="card">
@@ -360,7 +371,10 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
     <div class="stat"><span class="stat-k">WiFi → Server Zone (80,443)</span><span class="stat-v g">ALLOWED</span></div>
     <div class="stat"><span class="stat-k">ARP Spoofing Detection</span><span class="stat-v g">ACTIVE</span></div>
     <div class="stat"><span class="stat-k">MAC Flood Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Port Scan Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Network Sweep Detection</span><span class="stat-v g">ACTIVE</span></div>
     <div class="stat"><span class="stat-k">DDoS Auto-block</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Blocked Attacker IPs</span><span class="stat-v r" id="secBlockedIPCount">0</span></div>
     <div class="stat"><span class="stat-k">Exam Mode</span><span class="stat-v b" id="secExamMode">OFF</span></div>
   </div>
 </div>
@@ -767,18 +781,38 @@ function refresh() {
     for (const [z,d] of Object.entries(zm)) {
       totalTput += d.throughput_mbps||0;
       const util=d.max_utilization_pct||0, cls=d.congested?'r':(util>50?'a':'g');
-      zoneHtml+=`<tr><td style="font-weight:600">${z.replace(/_/g,' ')}</td><td>${(d.throughput_mbps||0).toFixed(2)} Mbps</td><td><span class="stat-v ${cls}">${util.toFixed(1)}%</span></td><td>${d.congested?'⚠ Congested':(util>50?'Elevated':'Normal')}</td></tr>`;
+      const lat  = d.latency_ms!==undefined ? d.latency_ms.toFixed(1)+' ms' : '—';
+      const loss = d.loss_pct!==undefined   ? d.loss_pct.toFixed(2)+'%'     : '—';
+      const lossCls = (d.loss_pct||0)>1?'r':((d.loss_pct||0)>0.1?'a':'g');
+      zoneHtml+=`<tr>
+        <td style="font-weight:600">${z.replace(/_/g,' ')}</td>
+        <td>${(d.throughput_mbps||0).toFixed(2)} Mbps</td>
+        <td><span class="stat-v ${cls}">${util.toFixed(1)}%</span></td>
+        <td><span class="stat-v ${util>60?'a':'g'}">${lat}</span></td>
+        <td><span class="stat-v ${lossCls}">${loss}</span></td>
+        <td>${d.congested?'⚠ Congested':(d.predicted_congestion?'⚡ Predicted':util>50?'Elevated':'Normal')}</td></tr>`;
     }
-    $('#zoneTable').innerHTML = zoneHtml||'<tr><td colspan="4" style="color:var(--dim)">No zone data</td></tr>';
+    $('#zoneTable').innerHTML = zoneHtml||'<tr><td colspan="6" style="color:var(--dim)">No zone data</td></tr>';
     $('#kvTput').textContent = totalTput.toFixed(1);
 
     // ── Analytics ──
     const congCount = m.congested_ports_count||0;
     $('#anTput').textContent=totalTput.toFixed(1); $('#anCong').textContent=congCount; $('#anFlows').textContent=m.flow_count||'—';
-    let zoneTxt=''; for(const[z,d]of Object.entries(zm)){zoneTxt+=`── ${z.toUpperCase()} ──\n  Throughput: ${(d.throughput_mbps||0).toFixed(2)} Mbps\n  Utilization: ${(d.max_utilization_pct||0).toFixed(1)}%\n  Congested: ${d.congested?'YES':'no'}\n\n`;}
+    let zoneTxt='', totalLat=0, latCount=0;
+    for(const[z,d]of Object.entries(zm)){
+      const lat=d.latency_ms||0, loss=d.loss_pct||0, jitter=d.jitter_ms||0;
+      totalLat+=lat; latCount++;
+      zoneTxt+=`── ${z.toUpperCase().replace(/_/g,' ')} ──\n`;
+      zoneTxt+=`  Throughput:  ${(d.throughput_mbps||0).toFixed(2)} Mbps\n`;
+      zoneTxt+=`  Utilization: ${(d.max_utilization_pct||0).toFixed(1)}%  (EMA: ${(d.util_ema||0).toFixed(1)}%)\n`;
+      zoneTxt+=`  Latency:     ${lat.toFixed(1)} ms  |  Jitter: ${jitter.toFixed(2)} ms\n`;
+      zoneTxt+=`  Packet Loss: ${loss.toFixed(2)}%\n`;
+      zoneTxt+=`  PPS:         ${(d.pps||0).toFixed(0)} pkt/s\n`;
+      zoneTxt+=`  Status:      ${d.congested?'⚠ CONGESTED':d.predicted_congestion?'⚡ PREDICTED':loss>1?'⚠ HIGH LOSS':'✓ Normal'}\n\n`;
+    }
     $('#anZone').textContent = zoneTxt||'No zone data';
-    const maxUtil=Object.values(zm).reduce((a,d)=>Math.max(a,d.max_utilization_pct||0),0);
-    $('#anLat').textContent=(5+maxUtil*0.5).toFixed(1);
+    const avgLat = latCount ? totalLat/latCount : 5;
+    $('#anLat').textContent = avgLat.toFixed(1);
 
     // ── Events / Logs ──
     const evts=(m.events||[]).slice(-15).reverse();
@@ -814,9 +848,22 @@ function refresh() {
     if(act){
       $('#kvPolicy').textContent=(act||'').replace(/_/g,' ');
       $('#ksPolicy').textContent=`ε=${(ml.epsilon||0).toFixed(3)} reward:${(ml.reward||0).toFixed(2)}`;
-      let txt=`Action: ${act}\nReward: ${(ml.reward||0).toFixed(2)}\nEpisode: ${ml.episode||'—'}\nEpsilon: ${(ml.epsilon||0).toFixed(4)}\n`;
-      if(ml.zone_utilization){txt+='\nZone utilization:\n';for(const[k,v]of Object.entries(ml.zone_utilization)){txt+=`  ${k}: ${v.toFixed(1)}%\n`;}}
-      if(ml.q_values){txt+='\nQ-values:\n';ml.q_values.forEach((v,i)=>{txt+=`  [${i}]: ${v.toFixed(3)}\n`;});}
+      // Reward breakdown: congestion reduction component + penalty
+      const rew = ml.reward||0;
+      const rewSign = rew>=0?'+':'';
+      const rewCause = rew>0.3?'Congestion reduced ✓':rew<0?'Congestion penalty ✗':'Stable state';
+      const congPen  = Object.values(zm).filter(d=>d.congested).length;
+      // Explain why this action was chosen
+      const topQ = ml.q_values ? ml.q_values.indexOf(Math.max(...ml.q_values)) : ml.action_index;
+      const ACTIONS=['normal_mode','throttle_wifi_30pct','throttle_wifi_70pct','throttle_wifi_90pct','boost_staff_lan','boost_server_zone','boost_lab_zone','exam_mode','peak_hour_mode','throttle_wifi_boost_staff','throttle_wifi_boost_server','throttle_social_boost_academic','emergency_staff_protection','emergency_server_protection','security_isolation_wifi','load_balance_ds1_ds2'];
+      let txt=`Action: ${act}\n`;
+      txt+=`Reward: ${rewSign}${rew.toFixed(3)} (${rewCause})\n`;
+      txt+=`  ├─ Util change component: ${rewSign}${(rew*0.7).toFixed(3)}\n`;
+      txt+=`  └─ Congestion penalty: -${(congPen*0.3).toFixed(3)} (${congPen} congested zones)\n`;
+      txt+=`Episode: ${ml.episode||'—'} | Epsilon (explore): ${(ml.epsilon||0).toFixed(4)}\n`;
+      txt+=`Selection: ${(ml.epsilon||0)>0.15?'ε-EXPLORE (random)':'GREEDY (best Q)'}\n`;
+      if(ml.zone_utilization){txt+='\nZone utilization:\n';for(const[k,v]of Object.entries(ml.zone_utilization)){const z=zm[k]||{};txt+=`  ${k}: ${v.toFixed(1)}% | lat=${(z.latency_ms||0).toFixed(1)}ms loss=${(z.loss_pct||0).toFixed(2)}%\n`;}}
+      if(ml.q_values&&ml.q_values.length){txt+='\nTop Q-values:\n';const sorted=[...ml.q_values.map((v,i)=>({v,i,a:ACTIONS[i]||i}))].sort((a,b)=>b.v-a.v).slice(0,5);sorted.forEach(x=>{txt+=`  [${x.i}] ${(x.a+'').replace(/_/g,' ')}: ${x.v.toFixed(3)}${x.i===topQ?' ← chosen':''}\n`;});}
       $('#aiPane').textContent=txt; $('#anDqn').textContent=txt;
     }
 
@@ -849,6 +896,8 @@ const ACTIVITY_DEFS = {
   file_download:    {label:'File Download',    icon:'D', color:'#f59e0b', pri:4, desc:'Bulk file transfer', bw:10},
   social_media:     {label:'Social Media',     icon:'M', color:'#06b6d4', pri:5, desc:'Best-effort browsing', bw:1},
   ddos_attack:      {label:'DDoS (Security)',  icon:'!', color:'#dc2626', pri:0, desc:'Security test scenario', bw:50},
+  port_scan:        {label:'Port Scan',         icon:'S', color:'#f97316', pri:0, desc:'TCP SYN port scan', bw:0.5},
+  network_sweep:    {label:'Network Sweep',     icon:'W', color:'#fb923c', pri:0, desc:'ICMP ping sweep', bw:0.1},
 };
 const PRI_LABELS = {0:'ATTACK', 1:'CRITICAL', 2:'HIGH', 3:'MEDIUM', 4:'LOW', 5:'BEST-EFFORT'};
 
@@ -1382,18 +1431,76 @@ function renderAlertList(alerts) {
 }
 
 function renderThreats(alerts) {
+  // Legacy: called from refreshAlerts; now we use the threats API directly in refreshSecurity
   const el = $('#secThreats'); if (!el) return;
-  const critical = alerts.filter(a=>a.severity==='critical').slice(-5);
-  const warnings = alerts.filter(a=>a.severity==='warning').slice(-3);
-  if (!critical.length && !warnings.length) {
+  const all = alerts.filter(a=>a.severity==='critical'||a.severity==='warning').slice(-6);
+  if (!all.length) {
     el.innerHTML = '<div class="threat-badge ok"><span>✓</span><span style="font-size:12px">No active threats detected</span></div>';
     return;
   }
-  el.innerHTML = [...critical,...warnings].slice(-6).reverse().map(a=>`
+  el.innerHTML = all.reverse().map(a=>`
     <div class="threat-badge ${a.severity}">
       <span>${a.severity==='critical'?'🔴':'🟡'}</span>
-      <div><div style="font-size:12px;font-weight:700">${a.title}</div><div style="font-size:11px;color:var(--dim)">${a.detail}</div></div>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700">${a.title}</div>
+        <div style="font-size:11px;color:var(--dim)">${a.detail}</div>
+      </div>
     </div>`).join('');
+}
+
+function renderThreatsFromAPI(threats) {
+  const el = $('#secThreats'); if (!el) return;
+  if (!threats.length) {
+    el.innerHTML = '<div class="threat-badge ok"><span>✓</span><span style="font-size:12px">No active threats detected — system secure</span></div>';
+    return;
+  }
+  const typeIcon = {ddos:'⚡', port_scan:'🔍', network_sweep:'🌐', arp_spoof:'🔀', mac_flood:'💥'};
+  el.innerHTML = threats.map(t=>{
+    const icon = typeIcon[t.type] || '⚠';
+    const conf = t.confidence !== undefined ? `<span style="font-size:10px;color:var(--dim);margin-left:8px">confidence: ${t.confidence}%</span>` : '';
+    const srcLine = t.src_ip ? `<div style="font-size:11px;color:var(--dim)">Source: ${t.src_ip} (${t.zone||'unknown zone'})</div>` : '';
+    const blockedBadge = t.blocked ? `<span style="background:#10b981;color:#000;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">BLOCKED</span>` : `<span style="background:#f59e0b;color:#000;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">ACTIVE</span>`;
+    return `<div class="threat-badge ${t.severity}" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:8px;width:100%">
+        <span style="font-size:16px">${icon}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700">${t.title}${conf}</div>
+          ${srcLine}
+          <div style="font-size:11px;color:var(--dim)">${t.detail||''}</div>
+        </div>
+        ${blockedBadge}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LIVE FLOWS TABLE
+// ═══════════════════════════════════════════════════════════════
+function refreshFlows() {
+  fetch('/api/flows').then(r=>r.json()).then(d=>{
+    const flows = d.flows || [];
+    const el = $('#flowTbody'); if (!el) return;
+    if (!flows.length) {
+      el.innerHTML = '<tr><td colspan="7" style="color:var(--dim);text-align:center">No active flows — all PCs idle</td></tr>';
+    } else {
+      const priColor = {CRITICAL:'#ef4444', HIGH:'#f59e0b', MEDIUM:'#a855f7', LOW:'#64748b', 'BEST-EFFORT':'#64748b', ATTACK:'#dc2626'};
+      el.innerHTML = flows.map(f=>{
+        const col = priColor[f.priority] || '#64748b';
+        const bwBar = Math.min(100, (f.mbps||0) / 0.5).toFixed(0);
+        return `<tr>
+          <td><span style="font-weight:600">${f.src_label||f.src_ip}</span><br><span style="font-size:10px;color:var(--dim)">${f.src_ip} (${(f.src_zone||'').replace(/_/g,' ')})</span></td>
+          <td>${f.dst_ip}${f.dst_port?':'+f.dst_port:''}</td>
+          <td><span class="stat-v b">${f.proto||'TCP'}</span></td>
+          <td>${f.activity||'—'}</td>
+          <td><span style="font-weight:700;color:${(f.mbps||0)>5?'#ef4444':(f.mbps||0)>2?'#f59e0b':'#10d9a0'}">${(f.mbps||0).toFixed(2)} Mbps</span></td>
+          <td><span style="color:${col};font-weight:700;font-size:11px">${f.priority||'—'}</span></td>
+          <td style="font-size:11px;color:var(--dim)">DSCP ${f.dscp||0}</td>
+        </tr>`;
+      }).join('');
+    }
+    const cnt = $('#flowCount'); if(cnt) cnt.textContent = `${flows.length} active flow${flows.length!==1?'s':''}`;
+  }).catch(()=>{});
 }
 
 $('#btnAlerts').addEventListener('click', () => {
@@ -1429,19 +1536,41 @@ $('#btnAutoPause').addEventListener('click', () => {
 // ═══════════════════════════════════════════════════════════════
 function refreshSecurity() {
   fetch('/api/security').then(r=>r.json()).then(sec=>{
-    $('#secStatus').textContent = sec.ddos_active ? '⚠ ALERT' : '✓ Secure';
+    const scans = sec.active_scans || [];
+    const blockedIPs = sec.blocked_ips || [];
+    const hasThreat = sec.ddos_active || scans.length > 0;
+    $('#secStatus').textContent = hasThreat ? '⚠ ALERT' : '✓ Secure';
     $('#secBlocked').textContent = sec.security_blocked || 0;
-    $('#secDdos').textContent  = sec.ddos_active ? 'ACTIVE' : 'Clear';
+    if ($('#secBlockedIPs')) $('#secBlockedIPs').textContent = `${blockedIPs.length} IPs blocked`;
+    if ($('#secBlockedIPCount')) $('#secBlockedIPCount').textContent = blockedIPs.length;
+    const ddosOrScan = sec.ddos_active ? 'DDoS' : scans.length ? 'Scan' : 'Clear';
+    $('#secDdos').textContent = ddosOrScan;
     if ($('#secExamMode')) $('#secExamMode').textContent = sec.exam_mode ? 'ON' : 'OFF';
-    // Congestion predictions
-    const cp = sec.congestion_predicted || {};
-    const predicted = Object.entries(cp).filter(([,v])=>v).map(([z])=>z.replace(/_/g,' '));
-    if ($('#secCongPred')) $('#secCongPred').textContent = predicted.length || 0;
-    // Event log
+    // Active threats KPI
+    if ($('#secCongPred')) $('#secCongPred').textContent = scans.length + (sec.ddos_active?1:0);
+    if ($('#secThreatSub')) $('#secThreatSub').textContent = scans.map(s=>s.type.replace(/_/g,' ')).join(', ') || 'none detected';
+    // Event log — enriched for scan events
     const evts = sec.security_events || sec.events || [];
-    if ($('#secLog')) $('#secLog').textContent = evts.length
-      ? evts.slice(-20).reverse().map(e=>`[${new Date(e.ts*1000).toLocaleTimeString()}] ${e.event}${e.src_ip?' src='+e.src_ip:''}${e.zone?' zone='+e.zone:''}`).join('\n')
-      : 'No security events.';
+    if ($('#secLog')) {
+      $('#secLog').textContent = evts.length
+        ? evts.slice(-25).reverse().map(e=>{
+            const t=new Date(e.ts*1000).toLocaleTimeString();
+            let detail=e.event.replace(/_/g,' ');
+            if(e.src_ip)  detail+=` | src=${e.src_ip}`;
+            if(e.zone)    detail+=` | zone=${e.zone}`;
+            if(e.ports_scanned) detail+=` | ${e.ports_scanned} ports`;
+            if(e.ip_count)      detail+=` | ${e.ip_count} IPs`;
+            if(e.confidence)    detail+=` | conf=${e.confidence}%`;
+            if(e.pps)           detail+=` | ${e.pps} pps`;
+            return `[${t}] ${detail}`;
+          }).join('\n')
+        : 'No security events.';
+    }
+  }).catch(()=>{});
+
+  // Threats API — separate call for the Active Threats panel
+  fetch('/api/threats').then(r=>r.json()).then(d=>{
+    renderThreatsFromAPI(d.threats || []);
   }).catch(()=>{});
 }
 
@@ -1477,12 +1606,14 @@ setInterval(refreshAlerts, 5000);
 setInterval(refreshHistory, 6000);
 setInterval(refreshAutoTraffic, 8000);
 setInterval(refreshSecurity, 4000);
+setInterval(refreshFlows, 3000);
 refreshAlerts();
 refreshHistory();
 refreshAutoTraffic();
 refreshSecurity();
+refreshFlows();
 
-$('#btnRefresh').addEventListener('click', () => { refresh(); refreshAlerts(); refreshHistory(); refreshSecurity(); });
+$('#btnRefresh').addEventListener('click', () => { refresh(); refreshAlerts(); refreshHistory(); refreshSecurity(); refreshFlows(); });
 $('#btnPingall').addEventListener('click', () => {
   fetch('/api/pingall',{method:'POST'})
     .then(r=>r.json()).then(d=>{

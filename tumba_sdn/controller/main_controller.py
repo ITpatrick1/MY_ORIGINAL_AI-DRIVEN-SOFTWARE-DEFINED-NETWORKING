@@ -11,7 +11,7 @@ from ryu.base import app_manager
 from ryu.controller import ofp_event
 from ryu.controller.handler import CONFIG_DISPATCHER, MAIN_DISPATCHER, set_ev_cls
 from ryu.lib import hub
-from ryu.lib.packet import packet, ethernet, ipv4, arp, ether_types
+from ryu.lib.packet import packet, ethernet, ipv4, tcp, arp, ether_types, icmp
 from ryu.ofproto import ofproto_v1_3
 
 METRICS_FILE   = os.environ.get('CAMPUS_METRICS_FILE',   '/tmp/campus_metrics.json')
@@ -39,6 +39,22 @@ THROTTLE_WIFI_PRIORITY  = 500
 QOS_COOKIE              = 0xCAFE0101
 EXAM_COOKIE             = 0xCAFE0202
 THROTTLE_COOKIE         = 0xCAFE0303
+SCAN_BLOCK_COOKIE       = 0xCAFE0404
+
+# Scan detection thresholds
+SCAN_PORT_THRESHOLD = 12   # distinct dst ports in window → port scan
+SCAN_IP_THRESHOLD   = 5    # distinct dst IPs in window → network sweep
+SCAN_WINDOW_S       = 30   # seconds
+
+# Latency base values per zone (ms) — increases with congestion
+ZONE_BASE_LATENCY_MS = {
+    'staff_lan':    4.0,
+    'server_zone':  2.0,
+    'it_lab':       3.0,
+    'student_wifi': 8.0,
+}
+
+PC_ACTIVITIES_FILE = '/tmp/campus_pc_activities.json'
 
 
 class CampusController(app_manager.RyuApp):
@@ -75,6 +91,11 @@ class CampusController(app_manager.RyuApp):
         self.ip_to_mac          = {}     # {ip: mac}  for ARP spoofing detection
         self.port_mac_count     = defaultdict(set)   # {(dpid,port): set of MACs}
         self.blocked_macs       = set()
+        self.blocked_ips        = set()  # IPs blocked by scan detection
+
+        # ── Security: Port scan / network sweep detection ──
+        # {src_ip: {ports: {dst_ip: set()}, ips: set(), ts: float, port_notified: bool, sweep_notified: bool}}
+        self.scan_tracker       = {}
 
         self._monitor = hub.spawn(self._monitor_loop)
         self.logger.info('CampusController v2 initialized')
@@ -183,6 +204,63 @@ class CampusController(app_manager.RyuApp):
         # Drop packets from blocked MACs
         if src in self.blocked_macs:
             return
+
+        # ── Port scan / network sweep detection ────────────────────────────
+        ip_pkt  = pkt.get_protocol(ipv4.ipv4)
+        tcp_pkt = pkt.get_protocol(tcp.tcp)
+        if ip_pkt:
+            src_ip = ip_pkt.src
+            dst_ip = ip_pkt.dst
+            now    = time.time()
+
+            # Drop traffic from IPs already identified as scanners
+            if src_ip in self.blocked_ips:
+                return
+
+            tr = self.scan_tracker.get(src_ip)
+            if tr is None or (now - tr['ts']) > SCAN_WINDOW_S:
+                tr = {'ports': defaultdict(set), 'ips': set(),
+                      'ts': now, 'port_notified': False, 'sweep_notified': False,
+                      'pps': 0, 'pkt_count': 0}
+                self.scan_tracker[src_ip] = tr
+
+            tr['ips'].add(dst_ip)
+            tr['pkt_count'] += 1
+            tr['pps'] = tr['pkt_count'] / max(1, now - tr['ts'])
+
+            if tcp_pkt:
+                tr['ports'][dst_ip].add(tcp_pkt.dst_port)
+                total_ports = sum(len(v) for v in tr['ports'].values())
+                if total_ports >= SCAN_PORT_THRESHOLD and not tr['port_notified']:
+                    tr['port_notified'] = True
+                    confidence = min(99, int(total_ports / SCAN_PORT_THRESHOLD * 75))
+                    self._append_event('port_scan_detected',
+                                       src_ip=src_ip,
+                                       dst_ip=dst_ip,
+                                       ports_scanned=total_ports,
+                                       zone=self._ip_to_zone(src_ip),
+                                       confidence=confidence,
+                                       pps=round(tr['pps'], 1))
+                    self.security_blocked += 1
+                    self.blocked_ips.add(src_ip)
+                    # Install drop rule for scanner IP
+                    match = parser.OFPMatch(
+                        eth_type=ether_types.ETH_TYPE_IP,
+                        ipv4_src=src_ip, ip_proto=6)
+                    self._add_flow(dp, 350, match, [],
+                                   cookie=SCAN_BLOCK_COOKIE, hard_timeout=120)
+
+            if len(tr['ips']) >= SCAN_IP_THRESHOLD and not tr['sweep_notified']:
+                tr['sweep_notified'] = True
+                confidence = min(99, int(len(tr['ips']) / SCAN_IP_THRESHOLD * 65))
+                self._append_event('network_sweep_detected',
+                                   src_ip=src_ip,
+                                   ips_probed=list(tr['ips'])[:10],
+                                   ip_count=len(tr['ips']),
+                                   zone=self._ip_to_zone(src_ip),
+                                   confidence=confidence,
+                                   pps=round(tr['pps'], 1))
+                self.security_blocked += 1
 
         self.mac_to_port.setdefault(dpid, {})[src] = in_port
         out_port = self.mac_to_port[dpid].get(dst, ofp.OFPP_FLOOD)
@@ -451,18 +529,36 @@ class CampusController(app_manager.RyuApp):
         dp.send_msg(parser.OFPFlowMod(**kw))
         self.flow_count += 1
 
+    def _ip_to_zone(self, ip: str) -> str:
+        for zone, prefix in ZONE_SUBNETS.items():
+            if ip.startswith(prefix):
+                return zone
+        return 'unknown'
+
     def _update_zone_metrics(self):
         for zone, zdpid in ZONE_DPID.items():
             ports   = [(d, p) for (d, p) in self.port_stats if d == zdpid]
             total   = sum(self.port_stats.get(k, {}).get('mbps', 0) for k in ports)
             mx      = max((self.port_stats.get(k, {}).get('util_pct', 0) for k in ports), default=0)
+            total_pps = sum(self.port_stats.get(k, {}).get('pps', 0) for k in ports)
+
+            # Latency/jitter/loss estimation from utilization (academic model)
+            base_lat = ZONE_BASE_LATENCY_MS.get(zone, 5.0)
+            latency  = base_lat + max(0.0, (mx - 50) * 1.2)
+            jitter   = max(0.0, (mx - 40) * 0.25)
+            loss_pct = max(0.0, (mx - 75) * 0.15) if mx > 75 else 0.0
+
             self.zone_metrics[zone] = {
                 'throughput_mbps':      round(total, 3),
                 'max_utilization_pct':  round(mx, 2),
                 'port_count':           len(ports),
+                'pps':                  round(total_pps, 1),
                 'congested':            mx > CONGESTION_THRESH,
                 'predicted_congestion': self.congestion_predicted.get(zone, False),
                 'util_ema':             round(self.zone_util_ema.get(zone, 0), 2),
+                'latency_ms':           round(latency, 1),
+                'jitter_ms':            round(jitter, 2),
+                'loss_pct':             round(loss_pct, 2),
             }
 
     def _load_ml_action(self):
@@ -481,6 +577,35 @@ class CampusController(app_manager.RyuApp):
         except Exception:
             pass
 
+    def _build_top_flows(self) -> list:
+        """Build live flow table from PC Activities state."""
+        try:
+            with open(PC_ACTIVITIES_FILE) as f:
+                pcs_data = json.load(f)
+        except Exception:
+            return []
+        profiles = pcs_data.get('profiles', {})
+        flows = []
+        for host, info in pcs_data.get('pcs', {}).items():
+            act = info.get('activity', 'idle')
+            if act == 'idle':
+                continue
+            profile = profiles.get(act, {})
+            flows.append({
+                'src_ip':    info.get('ip', '?'),
+                'src_label': info.get('label', host),
+                'src_zone':  info.get('zone', ''),
+                'dst_ip':    profile.get('dst_ip', '?'),
+                'dst_port':  profile.get('dst_port', 0),
+                'proto':     profile.get('proto', 'tcp').upper(),
+                'activity':  info.get('activity_label', act),
+                'mbps':      info.get('traffic_mbps', profile.get('bandwidth_mbps', 0)),
+                'priority':  info.get('priority_label', ''),
+                'dscp':      info.get('dscp', 0),
+            })
+        flows.sort(key=lambda x: x['mbps'], reverse=True)
+        return flows[:10]
+
     def _write_metrics(self):
         port_data = {}
         for (d, p), s in self.port_stats.items():
@@ -490,10 +615,26 @@ class CampusController(app_manager.RyuApp):
         sec_events = [e for e in self.ctrl_events
                       if e.get('event') in (
                           'arp_spoofing_detected', 'mac_flooding_detected',
+                          'port_scan_detected', 'network_sweep_detected',
                           'dqn_action_applied', 'congestion_predicted',
                           'exam_mode_enabled', 'exam_mode_disabled',
                           'social_throttle_enabled', 'link_failure', 'self_heal_reroute',
                       )][-20:]
+
+        # Recent scans for dashboard threat panel
+        active_scans = []
+        now = time.time()
+        for src_ip, tr in self.scan_tracker.items():
+            if now - tr['ts'] < SCAN_WINDOW_S * 2 and (tr['port_notified'] or tr['sweep_notified']):
+                active_scans.append({
+                    'src_ip':        src_ip,
+                    'zone':          self._ip_to_zone(src_ip),
+                    'ports_scanned': sum(len(v) for v in tr['ports'].values()),
+                    'ips_probed':    len(tr['ips']),
+                    'pps':           round(tr['pps'], 1),
+                    'type':          'port_scan' if tr['port_notified'] else 'network_sweep',
+                    'ts':            tr['ts'],
+                })
 
         payload = {
             'ts':                   time.time(),
@@ -508,10 +649,13 @@ class CampusController(app_manager.RyuApp):
             'security_events':      sec_events,
             'ddos_active':          bool(self.ddos_blocked_ips),
             'security_blocked':     self.security_blocked,
+            'blocked_ips':          list(self.blocked_ips),
+            'active_scans':         active_scans,
             'exam_mode':            self.exam_mode_active,
             'throttle_active':      self.throttle_active,
             'congestion_predicted': self.congestion_predicted,
             'zone_util_ema':        {z: round(v, 2) for z, v in self.zone_util_ema.items()},
+            'top_flows':            self._build_top_flows(),
         }
         try:
             tmp = METRICS_FILE + '.tmp'
