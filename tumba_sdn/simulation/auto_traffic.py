@@ -132,6 +132,39 @@ SCENARIOS = {
             'h_staff1': 'elearning', 'h_staff2': 'video_conf',
         },
     },
+    # P2: Scalability — simulates 200% user growth by maxing all zones simultaneously.
+    # The DQN agent must load-balance and throttle to maintain Staff/Server SLOs
+    # despite the full network being saturated. Demonstrates adaptive capacity management.
+    'scalability_stress': {
+        'duration_s': 120,
+        'overrides': {
+            # All WiFi devices at full load (simulates 3× student device growth)
+            'h_wifi1': 'file_download',   'h_wifi2': 'video_streaming',
+            'h_wifi3': 'file_download',   'h_wifi4': 'video_streaming',
+            # All Lab devices at full load (IoT + cloud workloads)
+            'h_lab1':  'file_download',   'h_lab2':  'video_streaming',
+            'h_lab3':  'file_download',
+            # Staff still need to work — mix of video conf and heavy admin
+            'h_staff1': 'video_conf',     'h_staff2': 'video_conf',
+            'h_staff3': 'file_download',
+            # Servers under maximum concurrent access
+            'h_mis':    'elearning',      'h_moodle': 'elearning',
+        },
+    },
+    # P5: Intelligent routing — test that DQN selects load_balance_ds1_ds2 and
+    # DSCP marking redirects traffic correctly when one distribution link is loaded.
+    'routing_test': {
+        'duration_s': 90,
+        'overrides': {
+            # Saturate DS1 path (Staff + Server)
+            'h_staff1': 'file_download', 'h_staff2': 'file_download',
+            'h_staff3': 'video_conf',
+            'h_mis':    'file_download', 'h_moodle': 'file_download',
+            # DS2 path (Lab + WiFi) is underloaded — demonstrates load imbalance
+            'h_lab1':   'idle',          'h_lab2':   'idle',
+            'h_wifi1':  'idle',          'h_wifi2':  'elearning',
+        },
+    },
 }
 
 

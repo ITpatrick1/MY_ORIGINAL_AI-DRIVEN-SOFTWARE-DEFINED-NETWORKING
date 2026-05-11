@@ -90,6 +90,12 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 .scenario-btn{padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--txt);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;text-align:left}
 .scenario-btn:hover{border-color:var(--accent);background:rgba(59,130,246,.08)}
 .scenario-btn.sel{border-color:var(--accent);background:rgba(59,130,246,.12);color:var(--accent)}
+.ibn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:10px}
+.ibn-btn{padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--txt);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:left;width:100%}
+.ibn-btn:hover{border-color:#10d9a0;background:rgba(16,217,160,.08);color:#10d9a0}
+.ibn-btn.fired{border-color:#10d9a0;background:rgba(16,217,160,.12);color:#10d9a0}
+.run-all-btn{padding:9px 18px;border-radius:10px;border:2px solid var(--accent);background:linear-gradient(135deg,rgba(59,130,246,.15),rgba(16,217,160,.1));color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.3px}
+.run-all-btn:hover{background:linear-gradient(135deg,rgba(59,130,246,.3),rgba(16,217,160,.2));transform:translateY(-1px);box-shadow:0 4px 16px rgba(59,130,246,.3)}
 .bar-wrap{margin:6px 0}.bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:3px}
 .bar{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
 .bar-fill{height:100%;border-radius:3px;transition:width .4s}
@@ -172,6 +178,9 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <button class="nav-btn" data-page="control"><span class="nav-icon">⚡</span>Control Center</button>
 <button class="nav-btn" data-page="security"><span class="nav-icon">⛨</span>Security</button>
 <button class="nav-btn" data-page="pcsim"><span class="nav-icon">◉</span>PC Simulator</button>
+<div class="nav-label">AI & Intelligence</div>
+<button class="nav-btn" data-page="intelligence"><span class="nav-icon">◎</span>Intelligence</button>
+<button class="nav-btn" data-page="ibn"><span class="nav-icon">✦</span>IBN Control</button>
 <div class="nav-label">Diagnostics</div>
 <button class="nav-btn" data-page="logs"><span class="nav-icon">≡</span>Logs & Events</button>
 <div style="margin-top:auto;padding:16px 8px;font-size:10px;color:var(--dim)"><span class="dot" style="display:inline-block;margin-right:6px"></span>Auto-refresh 2s</div>
@@ -190,7 +199,25 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 </div>
 <button class="btn" id="btnPingall">Ping All</button>
 <button class="btn primary" id="btnRefresh">↺ Refresh</button>
+<button class="run-all-btn" id="btnRunAll" title="Trigger all system operations simultaneously">⚡ Run All Demo</button>
 </header>
+<!-- Run All Demo Modal -->
+<div id="runAllModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:540px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,.8)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:16px;font-weight:700">⚡ Run All Demo</span>
+      <button onclick="document.getElementById('runAllModal').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:14px">Select a demo mode to trigger all system components simultaneously and watch the AI react in real-time.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <button class="ibn-btn" onclick="runAllDemo('full')" style="padding:14px;font-size:13px">🌐 Full Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">All scenarios + IBN intents</span></button>
+      <button class="ibn-btn" onclick="runAllDemo('security')" style="padding:14px;font-size:13px">🛡 Security Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">DDoS + Port Scan detection</span></button>
+      <button class="ibn-btn" onclick="runAllDemo('traffic')" style="padding:14px;font-size:13px">📈 Traffic Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">Scalability + Congestion</span></button>
+      <button class="ibn-btn" onclick="runAllDemo('qos')" style="padding:14px;font-size:13px">🎓 QoS Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">Exam mode + Load Balance</span></button>
+    </div>
+    <pre id="runAllLog" class="log" style="max-height:200px">Select a demo mode above...</pre>
+  </div>
+</div>
 
 <div class="content">
 <!-- OVERVIEW -->
@@ -218,6 +245,19 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
       <thead><tr><th>Source</th><th>→ Destination</th><th>Proto</th><th>Activity</th><th>Bandwidth</th><th>Priority</th><th>DSCP</th></tr></thead>
       <tbody id="flowTbody"><tr><td colspan="7" style="color:var(--dim)">Loading flows...</td></tr></tbody>
     </table>
+  </div>
+</div>
+
+<!-- Problem Statement Coverage Panel -->
+<div class="card" style="margin-top:14px" id="problemCoverageCard">
+  <div class="card-head" style="cursor:pointer" onclick="toggleProblemPanel()">
+    <span class="card-title">Problem Statement Coverage</span>
+    <span style="font-size:11px;color:var(--dim)">10 identified problems — click to expand/collapse</span>
+    <span id="pCovBadge" style="margin-left:auto;background:var(--green);color:#000;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">10 / 10</span>
+  </div>
+  <div class="card-body" id="problemCoverageBody" style="display:none">
+    <div id="problemGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px"></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--dim);text-align:right" id="pCovTs">Last updated: —</div>
   </div>
 </div>
 </div>
@@ -329,6 +369,8 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
       <button class="scenario-btn" data-sc="scanning">🔍 Port Scan / Sweep</button>
       <button class="scenario-btn" data-sc="staff_heavy">🏢 Staff Heavy</button>
       <button class="scenario-btn" data-sc="off_peak">🌙 Off-Peak</button>
+      <button class="scenario-btn" data-sc="scalability_stress" title="P2: Simulates 200% device growth — all zones saturated">📈 Scalability Stress</button>
+      <button class="scenario-btn" data-sc="routing_test" title="P5: Unbalanced load to trigger DQN load_balance_ds1_ds2 action">⚖ Routing / Load Balance</button>
     </div>
     <div style="display:flex;gap:8px"><button class="btn primary" id="btnStartSc">▶ Inject</button><button class="btn danger" id="btnStopSc">■ Stop All</button></div>
     <pre class="log" id="scLog" style="margin-top:12px">Select a scenario and click Inject.</pre>
@@ -475,6 +517,155 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 </div>
 </div>
 </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     INTELLIGENCE PAGE — KPIs + Gap Analysis + Traffic Profile Matrix + K-Means
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="pg-intelligence">
+<div class="kpi-row" id="intelligenceKpis">
+  <div class="kpi g"><div class="kpi-label">Convergence Time</div><div class="kpi-value" id="kpiConv">—</div><div class="kpi-sub">target &lt;100ms</div></div>
+  <div class="kpi b"><div class="kpi-label">Throughput Gain</div><div class="kpi-value" id="kpiGain">—</div><div class="kpi-sub">Staff LAN vs legacy baseline</div></div>
+  <div class="kpi g"><div class="kpi-label">Security Efficacy</div><div class="kpi-value" id="kpiEff">—</div><div class="kpi-sub">detected vs blocked</div></div>
+  <div class="kpi a"><div class="kpi-label">Staff LAN Latency</div><div class="kpi-value" id="kpiSLO">—</div><div class="kpi-sub">SLO target &lt;20ms</div></div>
+</div>
+
+<!-- MARL Agent Status - top so it's visible first -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">MARL System — Dual-Agent Status</span><span style="font-size:11px;color:var(--dim)">DQN Traffic Agent + Security Agent cooperating in real-time</span></div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Agent 1 — DQN Traffic Agent (16 actions)</div>
+        <pre class="log" id="marlDqnPane" style="max-height:220px">Loading DQN state...</pre>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#10d9a0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Agent 2 — Security Agent (Q-Table)</div>
+        <pre class="log" id="marlSecPane" style="max-height:220px">Loading security agent state...</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gap Analysis + KPIs -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+<div class="card">
+  <div class="card-head">
+    <span class="card-title">Gap Analysis — Legacy vs SDN</span>
+    <span style="font-size:11px;color:var(--dim)" id="gapSummaryBadge">Loading...</span>
+  </div>
+  <div class="card-body" style="overflow-x:auto;overflow-y:auto;max-height:280px">
+    <table class="zone-table" style="min-width:480px">
+      <thead><tr>
+        <th>Metric</th><th>Legacy</th><th>SDN</th>
+        <th>Δ</th><th>Status</th>
+      </tr></thead>
+      <tbody id="gapBody"><tr><td colspan="5" style="color:var(--dim)">Loading...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- K-Means + Time-Series stacked -->
+<div style="display:flex;flex-direction:column;gap:14px">
+<div class="card">
+  <div class="card-head"><span class="card-title">K-Means Traffic Clusters</span><span style="font-size:11px;color:var(--dim)" id="clusterInfo">—</span></div>
+  <div class="card-body" style="max-height:120px;overflow-y:auto"><div id="clusterList"><span style="color:var(--dim);font-size:12px">Loading clusters...</span></div></div>
+</div>
+<div class="card">
+  <div class="card-head"><span class="card-title">Time-Series Peak Analysis</span><span style="font-size:11px;color:var(--dim)" id="tsInfo">—</span></div>
+  <div class="card-body" style="max-height:120px;overflow-y:auto"><div id="tsList"><span style="color:var(--dim);font-size:12px">Collecting samples...</span></div></div>
+</div>
+</div>
+</div>
+
+<!-- Traffic Profile Matrix -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head">
+    <span class="card-title">Traffic Profile Matrix</span>
+    <span style="font-size:11px;color:var(--dim)">Zone × Priority × Bandwidth × Security</span>
+  </div>
+  <div class="card-body" style="overflow-x:auto">
+    <table class="zone-table" style="min-width:700px" id="trafProfileTbl">
+      <thead><tr>
+        <th>Zone</th><th>VLAN</th><th>Priority</th>
+        <th>BW Target</th><th>Perf. Target</th>
+        <th>Security</th><th>Live Util</th>
+      </tr></thead>
+      <tbody id="trafProfileBody"><tr><td colspan="7" style="color:var(--dim)">Loading...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     IBN CONTROL PAGE — Intent-Based Networking
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="pg-ibn">
+<div class="kpi-row">
+  <div class="kpi b"><div class="kpi-label">Active Intents</div><div class="kpi-value" id="ibnActiveCount">0</div><div class="kpi-sub">currently enforced</div></div>
+  <div class="kpi g"><div class="kpi-label">IBN Engine</div><div class="kpi-value" id="ibnStatus">—</div><div class="kpi-sub">intent translator</div></div>
+  <div class="kpi a"><div class="kpi-label">Current Action</div><div class="kpi-value" id="ibnCurAction" style="font-size:14px">—</div><div class="kpi-sub">from active intent</div></div>
+  <div class="kpi g"><div class="kpi-label">Total Submitted</div><div class="kpi-value" id="ibnTotal">0</div><div class="kpi-sub">this session</div></div>
+</div>
+
+<div style="display:grid;grid-template-columns:3fr 2fr;gap:14px;margin-bottom:14px">
+<!-- Submit Intent -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Submit Network Intent</span><span style="font-size:11px;color:var(--dim)">"What" not "How" — natural language policy</span></div>
+  <div class="card-body">
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Quick Intents — click to submit instantly</div>
+      <div class="ibn-grid">
+        <button class="ibn-btn" data-intent="Prioritize Staff LAN">🏢 Staff LAN Priority</button>
+        <button class="ibn-btn" data-intent="Prioritize Labs">🔬 Prioritize Labs</button>
+        <button class="ibn-btn" data-intent="Exam Mode">📝 Exam Mode</button>
+        <button class="ibn-btn" data-intent="Academic First">🎓 Academic First</button>
+        <button class="ibn-btn" data-intent="Load Balance">⚖ Load Balance</button>
+        <button class="ibn-btn" data-intent="Protect Server Zone">🖥 Protect Servers</button>
+        <button class="ibn-btn" data-intent="Block Student WiFi">🚫 Block Student WiFi</button>
+        <button class="ibn-btn" data-intent="Peak Hour">⏰ Peak Hour Mode</button>
+        <button class="ibn-btn" data-intent="Restore Normal">↺ Restore Normal</button>
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Custom Intent</div>
+      <input id="ibnTextInput" type="text" placeholder='e.g. "Prioritize Staff LAN" or "Exam Mode"'
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--txt);font-size:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--dim)">Duration:</label>
+        <select id="ibnDuration" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--txt);font-size:12px">
+          <option value="900">15 min</option>
+          <option value="1800">30 min</option>
+          <option value="3600" selected>1 hour</option>
+          <option value="7200">2 hours</option>
+          <option value="0">Indefinite</option>
+        </select>
+        <button class="btn primary" id="btnIbnSubmit">▶ Submit Intent</button>
+      </div>
+    </div>
+    <pre class="log" id="ibnLog" style="max-height:120px">Ready — submit an intent to control the network.</pre>
+  </div>
+</div>
+
+<!-- Active Intents -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Active Intents</span><button class="btn" id="btnIbnRefresh" style="font-size:11px;padding:4px 10px">↺</button></div>
+  <div class="card-body" style="max-height:420px;overflow-y:auto">
+    <div id="ibnIntentList"><span style="font-size:12px;color:var(--dim)">No active intents.</span></div>
+  </div>
+</div>
+</div>
+
+<!-- Action Catalogue -->
+<div class="card" style="margin-top:0">
+  <div class="card-head"><span class="card-title">Intent Catalogue — Available Actions</span><span style="font-size:11px;color:var(--dim)">Natural language → SDN policy</span></div>
+  <div class="card-body" style="overflow-x:auto;max-height:340px;overflow-y:auto">
+    <table class="zone-table" id="ibnCatalogueTbl" style="min-width:560px">
+      <thead><tr><th>Intent ID</th><th>SDN Action</th><th>Description</th></tr></thead>
+      <tbody id="ibnCatalogueBody"><tr><td colspan="3" style="color:var(--dim)">Loading...</td></tr></tbody>
+    </table>
+  </div>
 </div>
 </div>
 
@@ -848,22 +1039,63 @@ function refresh() {
     if(act){
       $('#kvPolicy').textContent=(act||'').replace(/_/g,' ');
       $('#ksPolicy').textContent=`ε=${(ml.epsilon||0).toFixed(3)} reward:${(ml.reward||0).toFixed(2)}`;
-      // Reward breakdown: congestion reduction component + penalty
       const rew = ml.reward||0;
       const rewSign = rew>=0?'+':'';
-      const rewCause = rew>0.3?'Congestion reduced ✓':rew<0?'Congestion penalty ✗':'Stable state';
-      const congPen  = Object.values(zm).filter(d=>d.congested).length;
-      // Explain why this action was chosen
       const topQ = ml.q_values ? ml.q_values.indexOf(Math.max(...ml.q_values)) : ml.action_index;
       const ACTIONS=['normal_mode','throttle_wifi_30pct','throttle_wifi_70pct','throttle_wifi_90pct','boost_staff_lan','boost_server_zone','boost_lab_zone','exam_mode','peak_hour_mode','throttle_wifi_boost_staff','throttle_wifi_boost_server','throttle_social_boost_academic','emergency_staff_protection','emergency_server_protection','security_isolation_wifi','load_balance_ds1_ds2'];
-      let txt=`Action: ${act}\n`;
-      txt+=`Reward: ${rewSign}${rew.toFixed(3)} (${rewCause})\n`;
-      txt+=`  ├─ Util change component: ${rewSign}${(rew*0.7).toFixed(3)}\n`;
-      txt+=`  └─ Congestion penalty: -${(congPen*0.3).toFixed(3)} (${congPen} congested zones)\n`;
-      txt+=`Episode: ${ml.episode||'—'} | Epsilon (explore): ${(ml.epsilon||0).toFixed(4)}\n`;
-      txt+=`Selection: ${(ml.epsilon||0)>0.15?'ε-EXPLORE (random)':'GREEDY (best Q)'}\n`;
-      if(ml.zone_utilization){txt+='\nZone utilization:\n';for(const[k,v]of Object.entries(ml.zone_utilization)){const z=zm[k]||{};txt+=`  ${k}: ${v.toFixed(1)}% | lat=${(z.latency_ms||0).toFixed(1)}ms loss=${(z.loss_pct||0).toFixed(2)}%\n`;}}
-      if(ml.q_values&&ml.q_values.length){txt+='\nTop Q-values:\n';const sorted=[...ml.q_values.map((v,i)=>({v,i,a:ACTIONS[i]||i}))].sort((a,b)=>b.v-a.v).slice(0,5);sorted.forEach(x=>{txt+=`  [${x.i}] ${(x.a+'').replace(/_/g,' ')}: ${x.v.toFixed(3)}${x.i===topQ?' ← chosen':''}\n`;});}
+      const selMode = (ml.epsilon||0)>0.15?'ε-EXPLORE (random)':'GREEDY (best Q)';
+
+      // ── Header ──
+      let txt=`Action : ${act}\n`;
+      txt+=`Reward : ${rewSign}${rew.toFixed(3)}  [fn: ${ml.xai?.reward_fn||'linear'}]\n`;
+      txt+=`Episode: ${ml.episode||'—'} | ε: ${(ml.epsilon||0).toFixed(4)} | ${selMode}\n`;
+
+      // ── Per-zone SLO reward breakdown (from XAI block) ──
+      const rb = ml.xai?.reward_breakdown;
+      if(rb){
+        txt+=`\nSLO Reward Breakdown (nonlinear exponential):\n`;
+        const ZW={'staff_lan':'Staff LAN (×0.40)','server_zone':'Server   (×0.30)','it_lab':'IT Lab   (×0.15)','student_wifi':'WiFi     (×0.10)'};
+        for(const[z,zl]of Object.entries(ZW)){
+          const zd=rb[z]||{}; const met=zd.slo_met;
+          const util=(zd.util||0).toFixed(1);
+          const lat=(zm[z]?.latency_ms||0).toFixed(1);
+          const loss=(zm[z]?.loss_pct||0).toFixed(2);
+          txt+=`  ${zl}: ${util}% util | ${lat}ms lat | ${loss}% loss  ${met?'✓ SLO met':'✗ SLO VIOLATED'}\n`;
+        }
+        const secPen=ml.xai?.security_penalty||0;
+        if(secPen<0) txt+=`  Security penalty: ${secPen.toFixed(2)}\n`;
+        txt+=`  ─────────────────────────────────────────\n`;
+        txt+=`  Total reward: ${rewSign}${rew.toFixed(3)}\n`;
+      } else {
+        // Fallback for old stub output
+        const congPen=Object.values(zm).filter(d=>d.congested).length;
+        txt+=`\nReward Breakdown:\n`;
+        txt+=`  Util change: ${rewSign}${(rew*0.7).toFixed(3)}\n`;
+        txt+=`  Congestion:  -${(congPen*0.3).toFixed(3)} (${congPen} zones)\n`;
+        if(ml.zone_utilization){for(const[k,v]of Object.entries(ml.zone_utilization)){const z=zm[k]||{};txt+=`  ${k}: ${v.toFixed(1)}% | lat=${(z.latency_ms||0).toFixed(1)}ms\n`;}}
+      }
+
+      // ── XAI Feature Attribution ──
+      const xf = ml.xai?.top_features;
+      if(xf&&xf.length){
+        txt+=`\nFeature Attribution (top 3 drivers):\n`;
+        xf.forEach((f,i)=>{
+          const bar='█'.repeat(Math.round((f.impact||0)*10)).padEnd(10,'░');
+          txt+=`  ${i+1}. ${(f.feature||'').padEnd(16)} ${bar} val=${f.value} impact=${f.impact.toFixed(3)}\n`;
+        });
+      }
+
+      // ── Safety Rail indicator ──
+      const sr=m.safety_rail;
+      if(sr&&sr.enforced) txt+=`\n⚠ Safety Rail: "${(sr.original||'').replace(/_/g,' ')}" → "${(sr.enforced||'').replace(/_/g,' ')}"\n`;
+
+      // ── Top Q-values ──
+      if(ml.q_values&&ml.q_values.length){
+        txt+=`\nTop Q-values:\n`;
+        const sorted=[...ml.q_values.map((v,i)=>({v,i,a:ACTIONS[i]||i}))].sort((a,b)=>b.v-a.v).slice(0,5);
+        sorted.forEach(x=>{txt+=`  [${x.i}] ${(x.a+'').replace(/_/g,' ')}: ${x.v.toFixed(3)}${x.i===topQ?' ← chosen':''}\n`;});
+      }
+
       $('#aiPane').textContent=txt; $('#anDqn').textContent=txt;
     }
 
@@ -1613,13 +1845,348 @@ refreshAutoTraffic();
 refreshSecurity();
 refreshFlows();
 
-$('#btnRefresh').addEventListener('click', () => { refresh(); refreshAlerts(); refreshHistory(); refreshSecurity(); refreshFlows(); });
-$('#btnPingall').addEventListener('click', () => {
-  fetch('/api/pingall',{method:'POST'})
+// ══════════════════════════════════════════════════════════════════════════
+//  INTELLIGENCE PAGE
+// ══════════════════════════════════════════════════════════════════════════
+
+function refreshIntelligence() {
+  // KPIs
+  fetch('/api/kpis').then(r=>r.json()).then(d=>{
+    function _kpiColor(pass){ return pass ? 'var(--green)' : 'var(--red)'; }
+    function _kpiLabel(pass){ return pass ? '✅' : '❌'; }
+
+    const conv = d.convergence_time_ms || {};
+    const gain = d.throughput_gain_pct || {};
+    const eff  = d.security_efficacy_pct || {};
+    const slo  = d.slo_staff_lan || {};
+
+    if($('#kpiConv'))  { $('#kpiConv').textContent  = conv.value != null ? conv.value+'ms' : '—';   $('#kpiConv').style.color  = _kpiColor(conv.pass); }
+    if($('#kpiGain'))  { $('#kpiGain').textContent  = gain.value != null ? gain.value+'%' : '—';    $('#kpiGain').style.color  = _kpiColor(gain.pass); }
+    if($('#kpiEff'))   { $('#kpiEff').textContent   = eff.value  != null ? eff.value+'%'  : '—';    $('#kpiEff').style.color   = _kpiColor(eff.pass);  }
+    if($('#kpiSLO'))   { $('#kpiSLO').textContent   = slo.value  != null ? slo.value+'ms' : '—';    $('#kpiSLO').style.color   = _kpiColor(slo.pass);  }
+  }).catch(()=>{});
+
+  // Traffic Profile Matrix
+  fetch('/api/traffic_profile').then(r=>r.json()).then(d=>{
+    const rows = d.matrix || [];
+    const m = _read_metrics_cache();
+    const zm = m.zone_metrics || {};
+    const body = rows.map(row=>{
+      const util = (zm[row.zone_key]||{}).max_utilization_pct || 0;
+      const utilColor = util>70?'var(--red)':util>50?'var(--amber)':'var(--green)';
+      const priColor  = row.priority===1?'var(--red)':row.priority===2?'var(--amber)':'var(--dim)';
+      return `<tr>
+        <td><b>${row.zone}</b></td>
+        <td><span style="color:var(--cyan)">VLAN ${row.vlan}</span></td>
+        <td><span style="color:${priColor};font-weight:700">P${row.priority}</span></td>
+        <td style="font-size:11px">${row.bandwidth_target}</td>
+        <td style="font-size:11px">${row.performance_target}</td>
+        <td style="font-size:10px;color:var(--dim)">${row.security}</td>
+        <td><span style="color:${utilColor};font-weight:700">${util.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('');
+    $('#trafProfileBody').innerHTML = body || '<tr><td colspan="7" style="color:var(--dim)">No data</td></tr>';
+  }).catch(()=>{});
+
+  // Gap Analysis
+  fetch('/api/gap_analysis').then(r=>r.json()).then(d=>{
+    const rows = d.comparison || [];
+    if($('#gapSummaryBadge')) $('#gapSummaryBadge').textContent =
+      d.improvement_pct != null ? `${d.improvement_pct}% metrics improved (${d.improvements}/${d.total_metrics})` : '';
+    const body = rows.map(row=>{
+      const better  = row.better;
+      const delta   = typeof row.delta_pct === 'number' ? (row.delta_pct>0?'+':'')+row.delta_pct+'%' : String(row.delta_pct||'');
+      const dColor  = better ? 'var(--green)' : 'var(--red)';
+      const badge   = better ? '<span style="color:var(--green)">✅ Improved</span>' : '<span style="color:var(--red)">❌ Below target</span>';
+      return `<tr>
+        <td><b style="font-size:11px">${row.metric}</b><br><span style="color:var(--dim);font-size:9px">${row.unit}</span></td>
+        <td style="color:var(--amber);font-size:11px">${row.legacy}</td>
+        <td style="color:var(--green);font-size:11px">${row.intelligent}</td>
+        <td style="color:${dColor};font-weight:700;font-size:11px">${delta}</td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('');
+    $('#gapBody').innerHTML = body || '<tr><td colspan="5" style="color:var(--dim)">No data</td></tr>';
+  }).catch(()=>{});
+
+  // K-Means Clusters
+  fetch('/api/clusters').then(r=>r.json()).then(d=>{
+    if(d.status === 'insufficient_data') {
+      $('#clusterList').innerHTML = '<span style="color:var(--dim);font-size:12px">Collecting data... ('+(d.samples||0)+' samples so far)</span>';
+      if($('#clusterInfo')) $('#clusterInfo').textContent = 'Need 8+ samples';
+      return;
+    }
+    const clusters = d.clusters || [];
+    if($('#clusterInfo')) $('#clusterInfo').textContent = `${clusters.length} profiles · ${d.samples} samples`;
+    const colors = ['var(--accent)','var(--green)','var(--amber)','var(--purple)'];
+    $('#clusterList').innerHTML = clusters.map((c,i)=>`
+      <div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;border-left:3px solid ${colors[i%4]}">
+        <div style="font-size:12px;font-weight:700;color:${colors[i%4]}">${c.label}</div>
+        <div style="font-size:11px;color:var(--dim);margin:3px 0">${c.pct_of_time}% of observed time (${c.member_count} samples)</div>
+        <div style="font-size:11px">${Object.entries(c.centroid_util||{}).map(([z,v])=>
+          `<span style="color:var(--dim)">${z.replace(/_/g,' ')}: </span><b>${v}%</b>`).join('  ')}</div>
+        <div style="font-size:10px;color:var(--amber);margin-top:4px">${c.recommendation}</div>
+      </div>`).join('') || '<span style="color:var(--dim)">No clusters yet</span>';
+  }).catch(()=>{});
+
+  // Time-Series
+  fetch('/api/timeseries').then(r=>r.json()).then(d=>{
+    if(d.status==='insufficient_data'){
+      $('#tsList').innerHTML='<span style="color:var(--dim);font-size:12px">Collecting samples... ('+d.samples+' so far)</span>';
+      if($('#tsInfo')) $('#tsInfo').textContent='Need 5+ samples';
+      return;
+    }
+    const zones = d.zones || {};
+    const overall = d.overall || {};
+    if($('#tsInfo')) $('#tsInfo').textContent = `${overall.samples_analysed||0} samples · ${overall.time_window_min||0}min window`;
+    const trendIcon = t => t==='rising'?'↑':t==='falling'?'↓':'→';
+    const trendColor = t => t==='rising'?'var(--red)':t==='falling'?'var(--green)':'var(--dim)';
+    $('#tsList').innerHTML = Object.entries(zones).map(([zone,z])=>`
+      <div style="padding:8px 0;border-bottom:1px solid rgba(42,53,85,.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-size:12px">${zone.replace(/_/g,' ')}</b>
+          <span style="color:${trendColor(z.trend_direction)};font-size:13px;font-weight:700">${trendIcon(z.trend_direction)} ${z.trend_direction}</span>
+        </div>
+        <div style="font-size:11px;color:var(--dim)">Peak: <b style="color:var(--txt)">${z.peak_utilization_pct}%</b> @ ${z.peak_time_str}
+          · Avg: ${z.avg_utilization_pct}%
+          · Crossings: <span style="${z.buffer_limit_crossings>0?'color:var(--red)':''}">${z.buffer_limit_crossings}</span></div>
+        <div style="font-size:10px;color:var(--amber);margin-top:2px">${z.recommendation}</div>
+      </div>`).join('') || '<span style="color:var(--dim)">No data</span>';
+  }).catch(()=>{});
+
+  // MARL — DQN Traffic Agent
+  fetch('/api/ml_action').then(r=>r.json()).then(d=>{
+    if(!d || !d.ts) return;
+    const pane = $('#marlDqnPane');
+    if(!pane) return;
+    pane.textContent = [
+      `Action : ${d.action || d.action_name || '—'}`,
+      `Reward : ${(d.reward||0).toFixed(3)}`,
+      `Epsilon: ${(d.epsilon||0).toFixed(4)}`,
+      `Steps  : ${d.steps || d.episode || 0}`,
+      `Period : ${d.period || '—'}`,
+      `IBN    : ${d.ibn ? 'override' : 'autonomous'}`,
+      '',
+      'Top Q-values:',
+      ...Object.entries(d.q_values||{}).sort((a,b)=>b[1]-a[1]).slice(0,5)
+               .map(([k,v])=>`  ${k}: ${v}`),
+    ].join('\n');
+  }).catch(()=>{});
+
+  // MARL — Security Agent
+  fetch('/api/marl_security').then(r=>r.json()).then(d=>{
+    if(!d || !d.ts) { if($('#marlSecPane')) $('#marlSecPane').textContent='Agent not running — start marl_security_agent.py'; return; }
+    const pane = $('#marlSecPane');
+    if(!pane) return;
+    const xai = d.explanation || {};
+    pane.textContent = [
+      `Action   : ${d.action}`,
+      `Threat   : ${d.threat_level}`,
+      `Reward   : ${(d.reward||0).toFixed(2)}`,
+      `Avg(50)  : ${(d.avg_reward_50||0).toFixed(2)}`,
+      `Epsilon  : ${(d.epsilon||0).toFixed(4)}`,
+      `Steps    : ${d.steps}`,
+      `Q-states : ${d.qtable_states}`,
+      '',
+      `Cooperates with DQN: ${d.cooperate_with_dqn||'—'}`,
+      '',
+      'Top Features:',
+      ...(xai.top_features||[]).map(f=>`  ${f.feature}: ${f.value}`),
+      '',
+      xai.action_rationale||'',
+    ].join('\n');
+  }).catch(()=>{});
+}
+
+// Small cache so Traffic Profile Matrix can show live utilisation
+let _metricsCache = {};
+function _read_metrics_cache(){ return _metricsCache; }
+
+// ══════════════════════════════════════════════════════════════════════════
+//  IBN PAGE
+// ══════════════════════════════════════════════════════════════════════════
+
+function refreshIBN() {
+  fetch('/api/ibn/intents').then(r=>r.json()).then(d=>{
+    const intents = d.active_intents || [];
+    if($('#ibnActiveCount')) $('#ibnActiveCount').textContent = intents.length;
+    if($('#ibnTotal'))       $('#ibnTotal').textContent       = d.total_submitted || 0;
+    if($('#ibnStatus'))      $('#ibnStatus').textContent      = intents.length ? '● Active' : '○ Idle';
+    if($('#ibnCurAction'))   $('#ibnCurAction').textContent   = intents.length ? intents[0].action : 'normal';
+
+    const list = $('#ibnIntentList');
+    if(list) {
+      if(!intents.length){
+        list.innerHTML='<span style="font-size:12px;color:var(--dim)">No active intents.</span>';
+      } else {
+        list.innerHTML = intents.map(i=>{
+          const exp = i.expires ? new Date(i.expires*1000).toLocaleTimeString() : '∞';
+          return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--accent)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b style="font-size:12px;color:var(--accent)">${i.id}</b>
+              <button onclick="cancelIntent('${i.id}')" style="font-size:10px;padding:2px 8px;border-radius:6px;border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);cursor:pointer">Cancel</button>
+            </div>
+            <div style="font-size:12px;margin:3px 0">"${i.text}"</div>
+            <div style="font-size:11px;color:var(--dim)">Action: <b style="color:var(--txt)">${i.action}</b> · Expires: ${exp} · Source: ${i.source}</div>
+            <div style="font-size:10px;color:var(--dim);margin-top:2px">${i.description}</div>
+          </div>`;
+        }).join('');
+      }
+    }
+  }).catch(()=>{});
+
+  // Action catalogue
+  fetch('/api/ibn/actions').then(r=>r.json()).then(d=>{
+    const actions = d.actions || [];
+    const body = $('#ibnCatalogueBody');
+    if(body) body.innerHTML = actions.map(a=>`<tr>
+      <td style="font-family:monospace;color:var(--accent)">${a.intent_id}</td>
+      <td style="font-family:monospace;color:var(--green)">${a.action}</td>
+      <td style="font-size:11px">${a.description}</td>
+    </tr>`).join('');
+  }).catch(()=>{});
+}
+
+function submitIntent(text) {
+  if(!text) return;
+  const dur = parseInt($('#ibnDuration').value || '3600');
+  fetch('/api/ibn/intent', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({text, duration_s: dur})
+  }).then(r=>r.json()).then(d=>{
+    const log = $('#ibnLog');
+    if(log) log.textContent = d.ok
+      ? `✅ ${d.message}`
+      : `❌ ${d.error}\n${d.hint||''}`;
+    refreshIBN();
+  }).catch(e=>{ if($('#ibnLog')) $('#ibnLog').textContent = 'Error: '+e; });
+}
+
+function cancelIntent(id) {
+  fetch(`/api/ibn/cancel/${id}`, {method:'DELETE'})
     .then(r=>r.json()).then(d=>{
-      alert(`Ping All: ${d.packet_loss_pct}% loss (${(d.pairs||[]).length} pairs)`);
-    }).catch(e=>alert('Ping failed: '+e));
+      if($('#ibnLog')) $('#ibnLog').textContent = d.ok ? `✅ Cancelled ${id}` : `❌ ${d.error}`;
+      refreshIBN();
+    }).catch(()=>{});
+}
+
+// Quick-intent buttons (ibn-btn class — no conflict with traffic scenario-btn)
+document.querySelectorAll('.ibn-btn[data-intent]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const txt = btn.dataset.intent;
+    if($('#ibnTextInput')) $('#ibnTextInput').value = txt;
+    btn.classList.add('fired');
+    setTimeout(()=>btn.classList.remove('fired'), 2000);
+    submitIntent(txt);
+  });
 });
+
+$('#btnIbnSubmit').addEventListener('click', ()=>{
+  submitIntent(($('#ibnTextInput').value||'').trim());
+});
+$('#ibnTextInput').addEventListener('keydown', e=>{
+  if(e.key === 'Enter') submitIntent(($('#ibnTextInput').value||'').trim());
+});
+$('#btnIbnRefresh').addEventListener('click', refreshIBN);
+
+// ══ Ping All ══════════════════════════════════════════════════════════════════
+$('#btnPingall').addEventListener('click', () => {
+  $('#btnPingall').textContent = '⏳ Pinging...';
+  $('#btnPingall').disabled = true;
+  fetch('/api/pingall', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      $('#btnPingall').textContent = 'Ping All';
+      $('#btnPingall').disabled = false;
+      const note = d.simulated ? ' (simulated)' : '';
+      const msg = `Ping All${note}\nPacket Loss: ${d.packet_loss_pct}%\nPairs tested: ${(d.pairs||[]).length}\n\n`
+        + (d.pairs||[]).slice(0,8).map(p=>`${p.src} → ${p.dst}: ${p.rtt_ms}ms, ${p.loss_pct}% loss`).join('\n');
+      alert(msg);
+    }).catch(e=>{
+      $('#btnPingall').textContent = 'Ping All';
+      $('#btnPingall').disabled = false;
+      alert('Ping failed: '+e);
+    });
+});
+
+// ══ Run All Demo ══════════════════════════════════════════════════════════════
+function runAllDemo(mode) {
+  const log = document.getElementById('runAllLog');
+  if (log) log.textContent = `Launching '${mode}' demo... please wait.\n`;
+  fetch('/api/run_all_demo', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode})
+  }).then(r=>r.json()).then(d=>{
+    let txt = `✅ ${d.message}\n\n`;
+    txt += '── Traffic Scenarios ──\n';
+    Object.entries(d.scenarios||{}).forEach(([sc,r])=>{
+      txt += `  ${sc}: ${r.ok ? '✓ started ('+r.duration_s+'s)' : '✗ '+r.error}\n`;
+    });
+    txt += '\n── IBN Intents ──\n';
+    Object.entries(d.intents||{}).forEach(([it,r])=>{
+      txt += `  "${it}": ${r.ok ? '✓ '+r.action : '✗ '+(r.error||'conflict')}\n`;
+    });
+    txt += '\nWatch the Overview & Analytics pages for AI reactions.';
+    if (log) log.textContent = txt;
+    // Trigger immediate refresh of all panels
+    setTimeout(()=>{ refresh(); refreshAlerts(); refreshIBN(); refreshIntelligence(); refreshSecurity(); refreshProblemCoverage(); }, 1500);
+  }).catch(e=>{ if(log) log.textContent = 'Error: '+e; });
+}
+
+document.getElementById('btnRunAll').addEventListener('click', ()=>{
+  document.getElementById('runAllModal').style.display = 'flex';
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Hook metrics cache update into main refresh
+// ══ Problem Statement Coverage ═══════════════════════════════════════════════
+function toggleProblemPanel() {
+  const body = document.getElementById('problemCoverageBody');
+  if (!body) return;
+  body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+function refreshProblemCoverage() {
+  fetch('/api/problem_coverage').then(r=>r.json()).then(data=>{
+    const grid = document.getElementById('problemGrid');
+    const badge = document.getElementById('pCovBadge');
+    const ts = document.getElementById('pCovTs');
+    if (!grid) return;
+    const probs = data.problems || [];
+    const live_count = probs.filter(p=>p.live).length;
+    if (badge) {
+      badge.textContent = live_count + ' / ' + probs.length;
+      badge.style.background = live_count === probs.length ? 'var(--green)' : live_count >= 8 ? 'var(--amber)' : 'var(--red)';
+    }
+    grid.innerHTML = probs.map(p => {
+      const dot = p.live ? '<span style="color:var(--green);font-size:14px">●</span>' : '<span style="color:var(--amber);font-size:14px">○</span>';
+      const chips = (p.components||[]).map(c=>`<span style="display:inline-block;background:rgba(255,255,255,0.07);border-radius:4px;padding:1px 6px;font-size:10px;margin:1px">${c}</span>`).join('');
+      return `<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          ${dot}
+          <span style="font-size:11px;font-weight:700;color:var(--dim)">${p.id}</span>
+          <span style="font-size:12px;font-weight:600">${p.title}</span>
+        </div>
+        <div style="margin-bottom:5px;line-height:1.5">${chips}</div>
+        <div style="font-size:10px;color:var(--dim);font-style:italic">${p.evidence}</div>
+      </div>`;
+    }).join('');
+    if (ts) ts.textContent = 'Last updated: ' + new Date(data.timestamp*1000).toLocaleTimeString();
+  }).catch(()=>{});
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+socket.on('metrics_update', m=>{ _metricsCache = m; });
+
+setInterval(refreshIntelligence, 8000);
+setInterval(refreshIBN, 5000);
+setInterval(refreshProblemCoverage, 12000);
+refreshIntelligence();
+refreshIBN();
+refreshProblemCoverage();
+
+$('#btnRefresh').addEventListener('click', () => { refresh(); refreshAlerts(); refreshHistory(); refreshSecurity(); refreshFlows(); refreshIntelligence(); refreshIBN(); refreshProblemCoverage(); });
 
 </script>
 </body>
