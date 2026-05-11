@@ -21,7 +21,7 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $*"; }
 # ── 0. Clean previous run ────────────────────────────────────────────────────
 info "Cleaning previous Mininet state..."
 mn --clean 2>/dev/null | tail -1
-for port in 6653 9090 9091 9095; do fuser -k ${port}/tcp 2>/dev/null; done
+for port in 6653 9090 9091 9093 9095 9096; do fuser -k ${port}/tcp 2>/dev/null; done
 pkill -f "ryu-manager" 2>/dev/null
 pkill -f "tumba_topo.py" 2>/dev/null
 pkill -f "pc_activity_manager.py" 2>/dev/null
@@ -45,9 +45,10 @@ sleep 8
 if ss -tlnp | grep -q ':9091'; then ok "Topology API running (port 9091)"; else fail "Topology failed — see $LOGS/topology.log"; fi
 
 # ── 3. Timetable Engine ──────────────────────────────────────────────────────
-info "Starting Timetable Engine (port 9092)..."
+info "Starting Timetable Engine (port 9096)..."
 nohup "$PYTHON" "$PROJECT/tumba_sdn/timetable/timetable_engine.py" \
-    --state /tmp/campus_timetable_state.json --port 9092 \
+    --db /tmp/campus_timetable.db \
+    --state-file /tmp/campus_timetable_state.json --port 9096 \
     > "$LOGS/timetable.log" 2>&1 &
 sleep 2
 
