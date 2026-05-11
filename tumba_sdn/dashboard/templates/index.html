@@ -1,0 +1,1195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tumba College SDN — Network Operations Center</title>
+<meta name="description" content="AI-Driven SDN monitoring dashboard for Tumba College of Technology">
+<script src="/static/js/socket.io.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e1a;--surface:#111827;--surface2:#1a2035;--surface3:#1f2a44;--border:#2a3555;--txt:#e2e8f0;--dim:#64748b;--accent:#3b82f6;--green:#10d9a0;--red:#ef4444;--amber:#f59e0b;--purple:#a855f7;--cyan:#06b6d4;--r:12px}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;background:linear-gradient(180deg,#0f1629,#111827);border-right:1px solid var(--border);padding:20px 12px;flex-shrink:0;position:fixed;height:100vh;overflow-y:auto;z-index:10}
+.brand{padding:8px 0 20px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.brand h1{font-size:14px;font-weight:800;color:var(--accent);letter-spacing:1px}
+.brand p{font-size:11px;color:var(--dim);margin-top:2px}
+.nav-label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;padding:12px 8px 6px}
+.nav-btn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;background:transparent;color:var(--dim);font-size:13px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .15s}
+.nav-btn:hover{background:var(--surface2);color:var(--txt)}
+.nav-btn.active{background:rgba(59,130,246,.12);color:var(--accent);font-weight:600}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.main{margin-left:220px;flex:1;min-height:100vh}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 24px;background:rgba(10,14,26,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border)}
+.topbar h2{font-size:16px;font-weight:700;flex:1}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid}
+.badge.ok{color:var(--green);border-color:rgba(16,217,160,.3);background:rgba(16,217,160,.08)}
+.badge.warn{color:var(--amber);border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08)}
+.badge.err{color:var(--red);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.content{padding:24px}
+.page{display:none}.page.active{display:block}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.g::before{background:linear-gradient(90deg,var(--green),var(--cyan))}
+.kpi.b::before{background:linear-gradient(90deg,var(--accent),var(--purple))}
+.kpi.a::before{background:linear-gradient(90deg,var(--amber),#f97316)}
+.kpi.r::before{background:linear-gradient(90deg,var(--red),#f43f5e)}
+.kpi-label{font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.kpi-value{font-size:28px;font-weight:800;margin:4px 0}
+.kpi-sub{font-size:11px;color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-title{font-size:13px;font-weight:700}
+.card-body{padding:14px 16px}
+.stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,53,85,.4);font-size:12px}
+.stat:last-child{border:none}
+.stat-k{color:var(--dim)}.stat-v{font-weight:600}
+.stat-v.g{color:var(--green)}.stat-v.r{color:var(--red)}.stat-v.a{color:var(--amber)}.stat-v.b{color:var(--accent)}
+pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;color:var(--dim);max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;line-height:1.6}
+.topo-svg{width:100%;height:680px;background:radial-gradient(ellipse at center,#0d1225,var(--bg))}
+/* ─── PC Browser Modal ─── */
+.pcb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.pcb-window{width:560px;max-width:95vw;background:#1a1f2e;border:1px solid var(--border);border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.8);overflow:hidden;animation:pcbIn .2s ease}
+@keyframes pcbIn{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+.pcb-titlebar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#141824;border-bottom:1px solid var(--border)}
+.pcb-dots{display:flex;gap:6px}.pcb-dot{width:12px;height:12px;border-radius:50%}
+.pcb-dot.r{background:#ef4444}.pcb-dot.y{background:#f59e0b}.pcb-dot.g{background:#10d9a0}
+.pcb-wintitle{flex:1;text-align:center;font-size:12px;font-weight:600;color:var(--dim)}
+.pcb-close{background:none;border:none;color:var(--dim);cursor:pointer;font-size:16px;padding:0 4px;line-height:1}
+.pcb-close:hover{color:var(--txt)}
+.pcb-urlbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#111827;border-bottom:1px solid var(--border)}
+.pcb-navbtns{color:var(--dim);font-size:14px;display:flex;gap:6px}
+.pcb-url{flex:1;background:#0a0e1a;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcb-body{padding:16px}
+.pcb-body h4{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.pcb-apps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.pcb-app{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.pcb-app:hover{border-color:var(--accent);background:rgba(59,130,246,.08);transform:translateY(-1px)}
+.pcb-app.active-app{border-color:currentColor;background:rgba(var(--app-rgb),.12)}
+.pcb-app-icon{font-size:22px;margin-bottom:4px}
+.pcb-app-name{font-size:11px;font-weight:600;color:var(--txt)}
+.pcb-app-sub{font-size:9px;color:var(--dim);margin-top:2px}
+.pcb-app-bw{font-size:9px;margin-top:3px;font-weight:600}
+.pcb-statusbar{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#111827;border-top:1px solid var(--border);font-size:11px}
+.pcb-statusbar span{display:flex;align-items:center;gap:4px}
+.pcb-bwbar{flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.pcb-bwfill{height:100%;border-radius:2px;transition:width .4s}
+@keyframes flowDot{0%{offset-distance:0%}100%{offset-distance:100%}}
+@keyframes hostPulse{0%,100%{opacity:.7}50%{opacity:1}}
+.btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn:hover{background:var(--surface3)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#2563eb}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px}
+.scenario-btn{padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--txt);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;text-align:left}
+.scenario-btn:hover{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.scenario-btn.sel{border-color:var(--accent);background:rgba(59,130,246,.12);color:var(--accent)}
+.bar-wrap{margin:6px 0}.bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:3px}
+.bar{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s}
+.zone-table{width:100%;border-collapse:collapse;font-size:12px}
+.zone-table th{text-align:left;padding:8px;color:var(--dim);font-weight:600;border-bottom:1px solid var(--border);font-size:11px}
+.zone-table td{padding:8px;border-bottom:1px solid rgba(42,53,85,.3)}
+.traffic-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.traffic-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.traffic-card h4{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.traffic-card .tval{font-size:18px;font-weight:800;margin-bottom:2px}
+.traffic-card .tsub{font-size:10px;color:var(--dim)}
+.host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.host-chip{font-size:9px;padding:2px 6px;border-radius:10px;border:1px solid var(--border);color:var(--dim);background:var(--surface3)}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0}.grid2,.grid3{grid-template-columns:1fr}.traffic-grid{grid-template-columns:1fr 1fr}}
+
+/* ─── PC Simulator styles ─── */
+.pcsim-layout{display:grid;grid-template-columns:1fr 340px;gap:14px;align-items:start}
+.pc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.pc-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.pc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,#64748b)}
+.pc-card:hover{border-color:var(--accent);background:var(--surface2)}
+.pc-card.selected{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.pc-card.active-traffic{box-shadow:0 0 12px rgba(59,130,246,.25)}
+.pc-icon{font-size:22px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:var(--surface3);font-family:monospace;font-weight:800;color:var(--c,#64748b)}
+.pc-name{font-size:12px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-ip{font-size:10px;color:var(--dim);margin-bottom:6px}
+.pc-activity-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(100,116,139,.15);color:var(--c,#64748b);margin-bottom:4px;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-traffic-bar{height:3px;background:var(--surface3);border-radius:2px;margin-top:4px;overflow:hidden}
+.pc-traffic-fill{height:100%;background:var(--c,#64748b);border-radius:2px;transition:width .6s}
+.pc-bw{font-size:9px;color:var(--dim);margin-top:2px}
+.pc-priority{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--c,#64748b)}
+
+/* Config panel */
+.config-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);position:sticky;top:70px}
+.config-panel .card-head{border-bottom:1px solid var(--border);padding:12px 16px}
+.act-btn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--txt);font-size:12px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .15s;margin-bottom:6px;text-align:left}
+.act-btn:hover{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.act-btn.active{border-color:var(--c,#64748b);background:rgba(100,116,139,.1);color:var(--c,#64748b);font-weight:700}
+.act-icon{width:24px;height:24px;border-radius:6px;background:rgba(100,116,139,.2);display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:900;font-size:12px;color:var(--c,#64748b);flex-shrink:0}
+.act-meta{display:flex;flex-direction:column;flex:1}
+.act-label{font-size:12px;font-weight:600}
+.act-desc{font-size:10px;color:var(--dim);margin-top:1px}
+.priority-badge{font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;background:rgba(100,116,139,.15);color:var(--c,#64748b);margin-left:auto;flex-shrink:0;align-self:flex-start}
+
+/* Scenario quick-set */
+.scenario-quick{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.sq-btn{padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--dim);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center}
+.sq-btn:hover{border-color:var(--accent);color:var(--txt)}
+
+/* Baseline comparison bar */
+.baseline-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(42,53,85,.4);font-size:11px}
+.baseline-row:last-child{border:none}
+.bl-label{flex:1;color:var(--dim)}
+.bl-before{color:var(--amber);font-weight:600;min-width:60px;text-align:right}
+.bl-after{color:var(--green);font-weight:600;min-width:60px;text-align:right}
+.bl-delta{color:var(--accent);font-weight:700;min-width:50px;text-align:right}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav class="sidebar">
+<div class="brand"><h1>SDN NOC</h1><p>Tumba College • Operations Center</p></div>
+<div class="nav-label">Monitoring</div>
+<button class="nav-btn active" data-page="overview"><span class="nav-icon">⬡</span>Overview</button>
+<button class="nav-btn" data-page="topology"><span class="nav-icon">◈</span>Topology</button>
+<button class="nav-btn" data-page="analytics"><span class="nav-icon">▲</span>Analytics</button>
+<div class="nav-label">Operations</div>
+<button class="nav-btn" data-page="control"><span class="nav-icon">⚡</span>Control Center</button>
+<button class="nav-btn" data-page="security"><span class="nav-icon">⛨</span>Security</button>
+<button class="nav-btn" data-page="pcsim"><span class="nav-icon">◉</span>PC Simulator</button>
+<div class="nav-label">Diagnostics</div>
+<button class="nav-btn" data-page="logs"><span class="nav-icon">≡</span>Logs & Events</button>
+<div style="margin-top:auto;padding:16px 8px;font-size:10px;color:var(--dim)"><span class="dot" style="display:inline-block;margin-right:6px"></span>Auto-refresh 2s</div>
+</nav>
+
+<div class="main">
+<header class="topbar">
+<h2 id="pageTitle">Overview</h2>
+<div class="badge ok" id="ctrlBadge"><span class="dot"></span>Controller</div>
+<button class="btn" id="btnPingall">Ping All</button>
+<button class="btn primary" id="btnRefresh">↺ Refresh</button>
+</header>
+
+<div class="content">
+<!-- OVERVIEW -->
+<div class="page active" id="pg-overview">
+<div class="kpi-row">
+<div class="kpi g" id="kpiCtrl"><div class="kpi-label">Controller</div><div class="kpi-value" id="kvCtrl">—</div><div class="kpi-sub" id="ksCtrl">Checking...</div></div>
+<div class="kpi b" id="kpiTput"><div class="kpi-label">Total Throughput</div><div class="kpi-value" id="kvTput">—</div><div class="kpi-sub" id="ksTput">Mbps across zones</div></div>
+<div class="kpi a" id="kpiPolicy"><div class="kpi-label">AI Action</div><div class="kpi-value" id="kvPolicy">—</div><div class="kpi-sub" id="ksPolicy">DQN agent state</div></div>
+<div class="kpi g" id="kpiSec"><div class="kpi-label">Security</div><div class="kpi-value" id="kvSec">—</div><div class="kpi-sub" id="ksSec">Zero-Trust status</div></div>
+</div>
+<div class="grid3">
+<div class="card"><div class="card-head"><span class="card-title">Zone Metrics</span></div><div class="card-body"><table class="zone-table"><thead><tr><th>Zone</th><th>Throughput</th><th>Utilization</th><th>Status</th></tr></thead><tbody id="zoneTable"></tbody></table></div></div>
+<div class="card"><div class="card-head"><span class="card-title">AI Routing Decision</span></div><div class="card-body"><pre class="log" id="aiPane">Loading AI state...</pre></div></div>
+<div class="card"><div class="card-head"><span class="card-title">Alerts & Events</span></div><div class="card-body"><pre class="log" id="alertPane">No active alerts.</pre></div></div>
+</div>
+<div class="grid2">
+<div class="card"><div class="card-head"><span class="card-title">Link Utilization</span></div><div class="card-body" id="linkBars">No data</div></div>
+<div class="card"><div class="card-head"><span class="card-title">Timetable State</span></div><div class="card-body"><pre class="log" id="ttPane">Loading timetable...</pre></div></div>
+</div>
+</div>
+
+<!-- TOPOLOGY -->
+<!-- PC Browser Modal -->
+<div class="pcb-overlay" id="pcbModal" style="display:none" onclick="if(event.target===this)closePcBrowser()">
+  <div class="pcb-window">
+    <div class="pcb-titlebar">
+      <div class="pcb-dots"><span class="pcb-dot r"></span><span class="pcb-dot y"></span><span class="pcb-dot g"></span></div>
+      <div class="pcb-wintitle" id="pcbTitle">PC Name</div>
+      <button class="pcb-close" onclick="closePcBrowser()">✕</button>
+    </div>
+    <div class="pcb-urlbar">
+      <div class="pcb-navbtns"><span>←</span><span>→</span><span>↻</span></div>
+      <div class="pcb-url" id="pcbUrl">https://campus.tumba.edu</div>
+      <span style="font-size:14px">🔍</span>
+    </div>
+    <div class="pcb-body">
+      <h4>Open an Application</h4>
+      <div class="pcb-apps" id="pcbApps"><!-- filled by JS --></div>
+    </div>
+    <div class="pcb-statusbar">
+      <span style="color:var(--dim)">Activity:</span>
+      <span id="pcbCurAct" style="font-weight:700">Idle</span>
+      <span class="pcb-bwbar"><span class="pcb-bwfill" id="pcbBwFill" style="width:0%;background:#10d9a0"></span></span>
+      <span id="pcbBwVal" style="font-weight:600;min-width:60px;text-align:right">0.0 Mbps</span>
+      <span id="pcbPriLabel" style="color:var(--dim)">Best-Effort</span>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="pg-topology">
+<div class="card"><div class="card-head"><span class="card-title">Live Network Topology — Click any PC to interact</span><span style="font-size:11px;color:var(--dim)" id="topoInfo">10 PCs • 4 servers • 7 switches</span></div>
+<div class="card-body"><svg class="topo-svg" id="topoSvg" viewBox="0 0 1100 680">
+<defs>
+  <marker id="arrowG" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#10d9a0" opacity="0.6"/></marker>
+  <marker id="arrowA" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#f59e0b" opacity="0.6"/></marker>
+  <marker id="arrowR" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#ef4444" opacity="0.6"/></marker>
+  <filter id="glow"><feGaussianBlur stdDeviation="3" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+</svg>
+<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--dim);flex-wrap:wrap">
+<span>◆ <b style="color:#3b82f6">Core Switch</b></span>
+<span>◆ <b style="color:#a855f7">Distribution</b></span>
+<span>◆ <b style="color:#10d9a0">Access Switch</b></span>
+<span>■ <b style="color:#06b6d4">Server</b></span>
+<span>● <b style="color:#94a3b8">End Device</b></span>
+<span style="margin-left:16px">━ <b style="color:#10d9a0">Normal</b></span>
+<span>━ <b style="color:#f59e0b">High</b></span>
+<span>━ <b style="color:#ef4444">Congested</b></span>
+<span>● <b style="color:#22d3ee">Traffic flow</b></span>
+</div></div></div>
+<!-- Traffic stats per zone -->
+<div class="traffic-grid" id="trafficZoneCards">
+  <div class="traffic-card" id="tcStaff"><h4>🏢 Staff LAN (VLAN 10)</h4><div class="tval" style="color:var(--green)" id="tcStaffVal">0 Mbps</div><div class="tsub" id="tcStaffSub">3 PCs — Access Switch</div><div class="host-list" id="tcStaffHosts"></div></div>
+  <div class="traffic-card" id="tcServer"><h4>🖥 Server Zone (VLAN 20)</h4><div class="tval" style="color:var(--cyan)" id="tcServerVal">0 Mbps</div><div class="tsub" id="tcServerSub">4 servers — Access Switch</div><div class="host-list" id="tcServerHosts"></div></div>
+  <div class="traffic-card" id="tcLab"><h4>🔬 IT Lab (VLAN 30)</h4><div class="tval" style="color:var(--purple)" id="tcLabVal">0 Mbps</div><div class="tsub" id="tcLabSub">3 PCs — Access Switch</div><div class="host-list" id="tcLabHosts"></div></div>
+  <div class="traffic-card" id="tcWifi"><h4>📶 Student WiFi (VLAN 40)</h4><div class="tval" style="color:var(--amber)" id="tcWifiVal">0 Mbps</div><div class="tsub" id="tcWifiSub">4 devices — Access Switch</div><div class="host-list" id="tcWifiHosts"></div></div>
+</div>
+</div>
+
+<!-- ANALYTICS -->
+<div class="page" id="pg-analytics">
+<div class="kpi-row">
+<div class="kpi b"><div class="kpi-label">Core Throughput</div><div class="kpi-value" id="anTput">—</div><div class="kpi-sub">Mbps</div></div>
+<div class="kpi g"><div class="kpi-label">Latency Est.</div><div class="kpi-value" id="anLat">—</div><div class="kpi-sub">ms average</div></div>
+<div class="kpi a"><div class="kpi-label">Congested Ports</div><div class="kpi-value" id="anCong">—</div><div class="kpi-sub">active</div></div>
+<div class="kpi g"><div class="kpi-label">Flow Rules</div><div class="kpi-value" id="anFlows">—</div><div class="kpi-sub">installed</div></div>
+</div>
+<div class="grid2">
+<div class="card"><div class="card-head"><span class="card-title">Per-Zone Performance</span></div><div class="card-body"><pre class="log" id="anZone">Loading...</pre></div></div>
+<div class="card"><div class="card-head"><span class="card-title">DQN Agent Analysis</span></div><div class="card-body"><pre class="log" id="anDqn">Loading...</pre></div></div>
+</div>
+</div>
+
+<!-- CONTROL -->
+<div class="page" id="pg-control">
+<div class="card" style="margin-bottom:20px"><div class="card-head"><span class="card-title">Traffic Scenario Simulator</span></div>
+<div class="card-body">
+<div class="scenario-grid" id="scenarioGrid">
+<button class="scenario-btn" data-sc="congestion">🌊 Congestion Test</button>
+<button class="scenario-btn" data-sc="ddos">⚡ DDoS Attack</button>
+<button class="scenario-btn" data-sc="link_failure">🔗 Link Failure</button>
+<button class="scenario-btn" data-sc="exam_mode">📝 Exam Mode</button>
+<button class="scenario-btn" data-sc="off_peak">🌙 Off-Peak</button>
+<button class="scenario-btn" data-sc="mixed">🔀 Mixed Scenario</button>
+</div>
+<div style="display:flex;gap:8px"><button class="btn primary" id="btnStartSc">▶ Start</button><button class="btn danger" id="btnStopSc">■ Stop</button></div>
+<pre class="log" id="scLog" style="margin-top:12px">Select a scenario and click Start.</pre>
+</div></div>
+</div>
+
+<!-- SECURITY -->
+<div class="page" id="pg-security">
+<div class="kpi-row">
+<div class="kpi g"><div class="kpi-label">Security Status</div><div class="kpi-value" id="secStatus">—</div><div class="kpi-sub" id="secSub">Zero-Trust active</div></div>
+<div class="kpi r"><div class="kpi-label">Blocked Flows</div><div class="kpi-value" id="secBlocked">—</div><div class="kpi-sub">total blocked</div></div>
+<div class="kpi a"><div class="kpi-label">DDoS Status</div><div class="kpi-value" id="secDdos">—</div><div class="kpi-sub" id="secDdosSub">monitoring</div></div>
+</div>
+<div class="card"><div class="card-head"><span class="card-title">Security Event Log</span></div><div class="card-body"><pre class="log" id="secLog">Loading security events...</pre></div></div>
+</div>
+
+<!-- LOGS -->
+<div class="page" id="pg-logs">
+<div class="card"><div class="card-head"><span class="card-title">Controller Event Log</span></div><div class="card-body"><pre class="log" id="evtLog" style="max-height:600px">Loading events...</pre></div></div>
+</div>
+
+<!-- PC SIMULATOR -->
+<div class="page" id="pg-pcsim">
+<!-- Top toolbar -->
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+  <span style="font-size:13px;font-weight:700;color:var(--txt)">End-Device Activity Simulator</span>
+  <span style="font-size:11px;color:var(--dim);flex:1">Click any PC to configure its activity. Traffic originates from real host namespaces.</span>
+  <button class="btn" id="btnCapture">◎ Capture Baseline</button>
+  <button class="btn danger" id="btnResetAll">■ Reset All</button>
+</div>
+
+<!-- KPI row for PC simulator -->
+<div class="kpi-row" style="margin-bottom:16px">
+  <div class="kpi r"><div class="kpi-label">Active PCs</div><div class="kpi-value" id="pcKpiActive">0</div><div class="kpi-sub">generating traffic</div></div>
+  <div class="kpi b"><div class="kpi-label">Total Traffic</div><div class="kpi-value" id="pcKpiTotal">0</div><div class="kpi-sub">Mbps combined</div></div>
+  <div class="kpi a"><div class="kpi-label">High Priority</div><div class="kpi-value" id="pcKpiHighPri">0</div><div class="kpi-sub">critical / high flows</div></div>
+  <div class="kpi g"><div class="kpi-label">Baseline</div><div class="kpi-value" id="pcKpiBaseline">—</div><div class="kpi-sub" id="pcKpiBaselineSub">not captured</div></div>
+</div>
+
+<!-- Quick scenario buttons -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Quick Scenario Setup</span><span style="font-size:11px;color:var(--dim)">Apply pre-defined multi-PC activity patterns</span></div>
+  <div class="card-body">
+    <div class="scenario-quick">
+      <button class="sq-btn" data-scenario="canonical">📋 Canonical Demo<br><small>6 PCs — one per activity type</small></button>
+      <button class="sq-btn" data-scenario="staff_heavy">🏢 Staff Heavy<br><small>All staff PCs active</small></button>
+      <button class="sq-btn" data-scenario="security_test">⚡ Security Test<br><small>DDoS vs exam traffic</small></button>
+      <button class="sq-btn" data-scenario="congestion">🌊 Congestion<br><small>Heavy bandwidth load</small></button>
+    </div>
+    <pre class="log" id="simLog" style="margin-top:8px;min-height:36px">Select a quick scenario above, or configure individual PCs below.</pre>
+  </div>
+</div>
+
+<div class="pcsim-layout">
+  <!-- Left: PC grid -->
+  <div>
+    <!-- Zone tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn active" id="zoneAll" onclick="filterZone('all')">All (10)</button>
+      <button class="btn" id="zoneStaff" onclick="filterZone('staff_lan')">Staff LAN (3)</button>
+      <button class="btn" id="zoneLab" onclick="filterZone('it_lab')">IT Lab (3)</button>
+      <button class="btn" id="zoneWifi" onclick="filterZone('student_wifi')">Student WiFi (4)</button>
+    </div>
+    <div class="pc-grid" id="pcGrid">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Right: Config panel -->
+  <div class="config-panel">
+    <div class="card-head">
+      <span class="card-title" id="cfgTitle">Select a PC</span>
+    </div>
+    <div style="padding:14px 16px">
+      <div id="cfgPcInfo" style="margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--dim);margin-bottom:4px" id="cfgPcMeta">—</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--dim)">Current:</span>
+          <span class="pc-activity-badge" id="cfgCurrentAct" style="--c:#64748b">Idle</span>
+          <span class="priority-badge" id="cfgPriority">P5</span>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Set Activity</div>
+      </div>
+      <div id="activityButtons">
+        <div style="font-size:12px;color:var(--dim);padding:20px 0;text-align:center">Click a PC card to configure its activity</div>
+      </div>
+
+      <!-- Live stats for selected PC -->
+      <div id="cfgLiveStats" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Live Statistics</div>
+        <div class="stat"><span class="stat-k">Traffic Rate</span><span class="stat-v g" id="cfgLiveBw">0 Mbps</span></div>
+        <div class="stat"><span class="stat-k">Priority</span><span class="stat-v b" id="cfgLivePri">—</span></div>
+        <div class="stat"><span class="stat-k">DSCP Mark</span><span class="stat-v" id="cfgLiveDscp">—</span></div>
+        <div class="stat"><span class="stat-k">Active Since</span><span class="stat-v" id="cfgLiveSince">—</span></div>
+        <div class="stat"><span class="stat-k">Zone</span><span class="stat-v" id="cfgLiveZone">—</span></div>
+      </div>
+    </div>
+
+    <!-- Baseline comparison -->
+    <div style="padding:0 16px 14px" id="baselinePanel" style="display:none">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border)">Before / After Comparison</div>
+      <div id="baselineCompare">
+        <div style="font-size:11px;color:var(--dim);text-align:center;padding:12px 0">Capture a baseline first</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+let selectedScenario = '';
+
+// Navigation
+$$('.nav-btn').forEach(btn => btn.addEventListener('click', () => {
+  $$('.nav-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const pg = btn.dataset.page;
+  $$('.page').forEach(p => p.classList.remove('active'));
+  $(`#pg-${pg}`).classList.add('active');
+  $('#pageTitle').textContent = btn.textContent.trim();
+}));
+
+// Scenario selection
+$$('.scenario-btn').forEach(btn => btn.addEventListener('click', () => {
+  $$('.scenario-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selectedScenario = btn.dataset.sc;
+}));
+$('#btnStartSc').addEventListener('click', () => {
+  if(!selectedScenario){$('#scLog').textContent='Select a scenario first.';return}
+  $('#scLog').textContent=`Starting ${selectedScenario}...`;
+  fetch('/api/scenario',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenario:selectedScenario})})
+    .then(r=>r.json()).then(d=>$('#scLog').textContent=JSON.stringify(d,null,2))
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+
+// ─── TOPOLOGY DEFINITIONS ───────────────────────────────────────────
+const SWITCHES = [
+  {id:'cs1', x:550, y:55,  label:'SDN Controller',        sublabel:'cs1 • dpid:1', type:'core',   dpid:'1'},
+  {id:'ds1', x:300, y:185, label:'Distribution Switch 1', sublabel:'ds1 • dpid:2', type:'dist',   dpid:'2'},
+  {id:'ds2', x:800, y:185, label:'Distribution Switch 2', sublabel:'ds2 • dpid:3', type:'dist',   dpid:'3'},
+  {id:'as1', x:110, y:340, label:'Access SW — Staff',     sublabel:'as1 • dpid:4', type:'access', dpid:'4'},
+  {id:'as2', x:390, y:340, label:'Access SW — Server',    sublabel:'as2 • dpid:5', type:'access', dpid:'5'},
+  {id:'as3', x:650, y:340, label:'Access SW — Lab',       sublabel:'as3 • dpid:6', type:'access', dpid:'6'},
+  {id:'as4', x:970, y:340, label:'Access SW — WiFi',      sublabel:'as4 • dpid:7', type:'access', dpid:'7'},
+];
+const SW_LINKS = [
+  {src:'cs1', dst:'ds1', zone:null},
+  {src:'cs1', dst:'ds2', zone:null},
+  {src:'ds1', dst:'as1', zone:'staff_lan'},
+  {src:'ds1', dst:'as2', zone:'server_zone'},
+  {src:'ds2', dst:'as3', zone:'it_lab'},
+  {src:'ds2', dst:'as4', zone:'student_wifi'},
+];
+const HOSTS = [
+  // Staff LAN — 3 PCs
+  {id:'h_staff1', sw:'as1', label:'Staff-PC1', ip:'10.10.0.1', icon:'💻', clickable:true},
+  {id:'h_staff2', sw:'as1', label:'Staff-PC2', ip:'10.10.0.2', icon:'💻', clickable:true},
+  {id:'h_staff3', sw:'as1', label:'Staff-PC3', ip:'10.10.0.3', icon:'💻', clickable:true},
+  // Server Zone — 4 servers (not clickable for activity)
+  {id:'h_mis',    sw:'as2', label:'MIS Server',   ip:'10.20.0.1', icon:'🖥', clickable:false},
+  {id:'h_dhcp',   sw:'as2', label:'DHCP Server',  ip:'10.20.0.2', icon:'🖥', clickable:false},
+  {id:'h_auth',   sw:'as2', label:'Auth Server',  ip:'10.20.0.3', icon:'🖥', clickable:false},
+  {id:'h_moodle', sw:'as2', label:'Moodle LMS',   ip:'10.20.0.4', icon:'🖥', clickable:false},
+  // IT Lab — 3 PCs
+  {id:'h_lab1',  sw:'as3', label:'Lab-PC1', ip:'10.30.0.1', icon:'🖥', clickable:true},
+  {id:'h_lab2',  sw:'as3', label:'Lab-PC2', ip:'10.30.0.2', icon:'🖥', clickable:true},
+  {id:'h_lab3',  sw:'as3', label:'Lab-PC3', ip:'10.30.0.3', icon:'🖥', clickable:true},
+  // Student WiFi — 4 devices
+  {id:'h_wifi1', sw:'as4', label:'Student-PC1', ip:'10.40.0.1', icon:'📱', clickable:true},
+  {id:'h_wifi2', sw:'as4', label:'Student-PC2', ip:'10.40.0.2', icon:'📱', clickable:true},
+  {id:'h_wifi3', sw:'as4', label:'Student-PC3', ip:'10.40.0.3', icon:'📱', clickable:true},
+  {id:'h_wifi4', sw:'as4', label:'Student-PC4', ip:'10.40.0.4', icon:'📱', clickable:true},
+];
+
+// ─── Link bandwidth helper: derive Mbps from zone metrics ───────────
+function linkMbps(src, dst, zm) {
+  const lz = {
+    'ds1-as1':'staff_lan','as1-ds1':'staff_lan',
+    'ds1-as2':'server_zone','as2-ds1':'server_zone',
+    'ds2-as3':'it_lab','as3-ds2':'it_lab',
+    'ds2-as4':'student_wifi','as4-ds2':'student_wifi',
+  };
+  const k = `${src}-${dst}`;
+  if (lz[k]) return (zm[lz[k]]||{}).throughput_mbps||0;
+  // Core uplinks: sum the zones they serve
+  if (src==='cs1'||dst==='cs1') {
+    const other = src==='cs1'?dst:src;
+    if (other==='ds1') return ((zm.staff_lan||{}).throughput_mbps||0)+((zm.server_zone||{}).throughput_mbps||0);
+    if (other==='ds2') return ((zm.it_lab||{}).throughput_mbps||0)+((zm.student_wifi||{}).throughput_mbps||0);
+  }
+  return 0;
+}
+function linkColor(mbps) {
+  if (mbps > 15) return '#ef4444';
+  if (mbps > 5)  return '#f59e0b';
+  if (mbps > 0.1) return '#10d9a0';
+  return '#1e3a5f';
+}
+function linkWidth(mbps) { return Math.max(1.5, Math.min(8, 1.5 + mbps * 0.35)); }
+
+let topoAnimFrame = 0;
+let _lastTopoMetrics = null;
+
+function drawTopology(metrics) {
+  if (metrics) _lastTopoMetrics = metrics;
+  else metrics = _lastTopoMetrics || {};
+  topoAnimFrame++;
+  const svg = $('#topoSvg');
+  const swMap = {};
+  SWITCHES.forEach(s => swMap[s.id] = s);
+  const zm = metrics.zone_metrics || {};
+  const ps = metrics.switch_port_stats || {};
+
+  // Host positions — fan out below their access switch
+  const hostGroups = {};
+  HOSTS.forEach(h => { if (!hostGroups[h.sw]) hostGroups[h.sw] = []; hostGroups[h.sw].push(h); });
+  const hostPos = {};
+  for (const [swId, hosts] of Object.entries(hostGroups)) {
+    const sw = swMap[swId]; if (!sw) continue;
+    const n = hosts.length;
+    const spread = Math.min(n * 52, 300);
+    const startX = sw.x - spread / 2;
+    const hostY = sw.y + 135;
+    hosts.forEach((h, i) => {
+      hostPos[h.id] = { x: startX + (spread / (n - 1 || 1)) * i, y: hostY };
+    });
+  }
+
+  let html = '';
+
+  // ── Zone background bands ──────────────────────────────────────
+  const zoneBands = [
+    {x:20,  w:230, color:'#10d9a0', label:'Staff LAN'},
+    {x:270, w:240, color:'#06b6d4', label:'Server Zone'},
+    {x:530, w:240, color:'#a855f7', label:'IT Lab'},
+    {x:800, w:270, color:'#f59e0b', label:'Student WiFi'},
+  ];
+  zoneBands.forEach(b => {
+    html += `<rect x="${b.x}" y="475" width="${b.w}" height="170" rx="10" fill="${b.color}" opacity="0.03" stroke="${b.color}" stroke-width="0.5" opacity="0.15"/>`;
+  });
+
+  // ── Switch-to-switch links ─────────────────────────────────────
+  SW_LINKS.forEach(l => {
+    const s = swMap[l.src], d = swMap[l.dst]; if (!s || !d) return;
+    const mbps = linkMbps(l.src, l.dst, zm);
+    const col  = linkColor(mbps);
+    const w    = linkWidth(mbps);
+    const mx   = (s.x + d.x) / 2, my = (s.y + d.y) / 2;
+    const opacity = mbps > 0.1 ? 0.9 : 0.35;
+
+    // Link line
+    html += `<line x1="${s.x}" y1="${s.y}" x2="${d.x}" y2="${d.y}" stroke="${col}" stroke-width="${w}" opacity="${opacity}" stroke-linecap="round"/>`;
+
+    // Mbps label bubble
+    const bwLabel = mbps > 0.05 ? `${mbps.toFixed(1)} Mbps` : 'idle';
+    const labelBg = mbps > 15 ? '#3a0d0d' : (mbps > 5 ? '#3a2800' : (mbps > 0.1 ? '#0a2a1a' : 'transparent'));
+    if (mbps > 0.05) {
+      html += `<rect x="${mx-22}" y="${my-9}" width="44" height="14" rx="7" fill="${labelBg}" opacity="0.9"/>`;
+    }
+    html += `<text x="${mx}" y="${my+3}" text-anchor="middle" fill="${col}" font-size="8.5" font-weight="700">${bwLabel}</text>`;
+
+    // Animated traffic dots
+    if (mbps > 0.1) {
+      const dots = Math.min(6, Math.ceil(mbps / 3));
+      for (let i = 0; i < dots; i++) {
+        const t = ((topoAnimFrame * 2.5 + i * (100 / dots)) % 100) / 100;
+        const dx = s.x + (d.x - s.x) * t, dy = s.y + (d.y - s.y) * t;
+        html += `<circle cx="${dx}" cy="${dy}" r="3.5" fill="${col}" opacity="0.85" filter="url(#glow)"/>`;
+      }
+    }
+  });
+
+  // ── Host-to-switch links ───────────────────────────────────────
+  HOSTS.forEach(h => {
+    const sw = swMap[h.sw]; if (!sw) return;
+    const hp = hostPos[h.id]; if (!hp) return;
+    const pci = pcState[h.id];
+    const act = pci ? pci.activity : 'idle';
+    const bw  = pci ? (pci.traffic_mbps || 0) : 0;
+    const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+    const lColor = act !== 'idle' ? actDef.color : '#1a2a40';
+    const lWidth = act !== 'idle' ? Math.max(1.5, 1.5 + bw * 0.12) : 1;
+    html += `<line x1="${sw.x}" y1="${sw.y+18}" x2="${hp.x}" y2="${hp.y-14}" stroke="${lColor}" stroke-width="${lWidth}" stroke-dasharray="${act==='idle'?'3,4':'none'}" opacity="${act!=='idle'?0.7:0.3}"/>`;
+    if (act !== 'idle' && bw > 0.5) {
+      const t = ((topoAnimFrame * 4 + h.id.length * 13) % 100) / 100;
+      const dx = sw.x + (hp.x - sw.x) * t, dy = (sw.y + 18) + (hp.y - 14 - sw.y - 18) * t;
+      html += `<circle cx="${dx}" cy="${dy}" r="2.5" fill="${actDef.color}" opacity="0.9"/>`;
+    }
+  });
+
+  // ── Switch nodes ───────────────────────────────────────────────
+  SWITCHES.forEach(n => {
+    const colors = {core:'#3b82f6', dist:'#a855f7', access:'#10d9a0'};
+    const c = colors[n.type] || '#64748b';
+    const r = n.type === 'core' ? 26 : (n.type === 'dist' ? 20 : 17);
+    const isCore = n.type === 'core';
+    // Outer glow
+    html += `<circle cx="${n.x}" cy="${n.y}" r="${r+8}" fill="none" stroke="${c}" stroke-width="1" opacity="0.15"/>`;
+    // Main circle
+    html += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${c}" fill-opacity="0.10" stroke="${c}" stroke-width="2"/>`;
+    // Icon
+    const icon = n.type === 'core' ? '⬡' : (n.type === 'dist' ? '◈' : '◆');
+    html += `<text x="${n.x}" y="${n.y+5}" text-anchor="middle" fill="${c}" font-size="${r-4}" font-weight="800">${icon}</text>`;
+    // Label
+    html += `<text x="${n.x}" y="${n.y+r+15}" text-anchor="middle" fill="#cbd5e1" font-size="${isCore?10.5:9.5}" font-weight="700">${n.label}</text>`;
+    html += `<text x="${n.x}" y="${n.y+r+26}" text-anchor="middle" fill="#475569" font-size="8">${n.sublabel}</text>`;
+  });
+
+  // ── Host nodes (clickable PCs) ─────────────────────────────────
+  HOSTS.forEach(h => {
+    const hp = hostPos[h.id]; if (!hp) return;
+    const isServer = h.sw === 'as2';
+    const r = isServer ? 11 : 10;
+    const zoneColor = isServer ? '#06b6d4' : (h.sw==='as4'?'#f59e0b':(h.sw==='as1'?'#10d9a0':'#a855f7'));
+    const pci = pcState[h.id];
+    const act = pci ? (pci.activity || 'idle') : 'idle';
+    const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+    const bw = pci ? (pci.traffic_mbps || 0) : 0;
+    const isActive = act !== 'idle';
+
+    // Glow/pulse ring when active
+    if (isActive) {
+      const pulseR = r + 6 + Math.sin(topoAnimFrame * 0.25) * 2;
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${pulseR}" fill="${actDef.color}" opacity="0.12" stroke="${actDef.color}" stroke-width="0.8"/>`;
+    }
+    // Base ring
+    const ringColor = isActive ? actDef.color : zoneColor;
+    html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r+2}" fill="none" stroke="${ringColor}" stroke-width="1.5" opacity="${isActive?0.6:0.2}"/>`;
+
+    if (h.clickable) {
+      // Clickable PC node — shows pointer cursor and hover effect
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r}" fill="${isActive?actDef.color:zoneColor}" fill-opacity="${isActive?0.25:0.12}" stroke="${ringColor}" stroke-width="2" style="cursor:pointer" onclick="openPcBrowser('${h.id}')"/>`;
+      html += `<text x="${hp.x}" y="${hp.y+5}" text-anchor="middle" font-size="${isServer?13:11}" style="cursor:pointer;pointer-events:none">${isActive?actDef.icon:h.icon}</text>`;
+      // Activity badge above node
+      if (isActive) {
+        html += `<rect x="${hp.x-20}" y="${hp.y-r-16}" width="40" height="12" rx="6" fill="${actDef.color}" opacity="0.9"/>`;
+        html += `<text x="${hp.x}" y="${hp.y-r-7}" text-anchor="middle" fill="#fff" font-size="7.5" font-weight="700">${actDef.label.substring(0,10)}</text>`;
+      }
+      // Label + IP
+      html += `<text x="${hp.x}" y="${hp.y+r+13}" text-anchor="middle" fill="${isActive?actDef.color:'#94a3b8'}" font-size="9" font-weight="700" style="cursor:pointer" onclick="openPcBrowser('${h.id}')">${h.label}</text>`;
+      html += `<text x="${hp.x}" y="${hp.y+r+23}" text-anchor="middle" fill="#475569" font-size="7.5">${h.ip}</text>`;
+      // Mbps label when active
+      if (isActive && bw > 0.1) {
+        html += `<text x="${hp.x}" y="${hp.y+r+34}" text-anchor="middle" fill="${actDef.color}" font-size="7.5" font-weight="700">${bw.toFixed(1)}M</text>`;
+      }
+      // Hover overlay (transparent click target)
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r+6}" fill="transparent" style="cursor:pointer" onclick="openPcBrowser('${h.id}')" title="${h.label} — Click to open"/>`;
+    } else {
+      // Server node (not clickable)
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r}" fill="${zoneColor}" fill-opacity="0.12" stroke="${zoneColor}" stroke-width="1.5"/>`;
+      html += `<text x="${hp.x}" y="${hp.y+5}" text-anchor="middle" font-size="12">${h.icon}</text>`;
+      html += `<text x="${hp.x}" y="${hp.y+r+13}" text-anchor="middle" fill="#64748b" font-size="8.5" font-weight="600">${h.label}</text>`;
+      html += `<text x="${hp.x}" y="${hp.y+r+23}" text-anchor="middle" fill="#475569" font-size="7.5">${h.ip}</text>`;
+    }
+  });
+
+  // ── Zone labels ────────────────────────────────────────────────
+  const zoneLabels = [
+    {x:112, y:636, label:'VLAN 10 — Staff LAN',    color:'#10d9a0'},
+    {x:395, y:636, label:'VLAN 20 — Server Zone',  color:'#06b6d4'},
+    {x:653, y:636, label:'VLAN 30 — IT Lab',        color:'#a855f7'},
+    {x:970, y:636, label:'VLAN 40 — Student WiFi',  color:'#f59e0b'},
+  ];
+  zoneLabels.forEach(z => {
+    html += `<rect x="${z.x-72}" y="${z.y-9}" width="144" height="16" rx="8" fill="${z.color}" opacity="0.06" stroke="${z.color}" stroke-width="0.8" opacity="0.25"/>`;
+    html += `<text x="${z.x}" y="${z.y+4}" text-anchor="middle" fill="${z.color}" font-size="9" font-weight="700">${z.label}</text>`;
+  });
+
+  svg.innerHTML = svg.querySelector('defs').outerHTML + html;
+}
+
+// ─── SINGLE CONSOLIDATED POLL LOOP ──────────────────────────────
+// Fetches all data in one parallel request batch every 2 s.
+// Topology animation runs at 800 ms but only redraws (no fetch).
+
+function refresh() {
+  Promise.all([
+    fetch('/api/metrics').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/ml_action').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/pc_activities').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/timetable').then(r=>r.json()).catch(()=>({})),
+  ]).then(([m, ml, pc, tt]) => {
+
+    // ── Topology + zone traffic cards ──
+    drawTopology(m);
+    const zm = m.zone_metrics||{};
+    const zMap = {staff_lan:'Staff', server_zone:'Server', it_lab:'Lab', student_wifi:'Wifi'};
+    for (const [zk, label] of Object.entries(zMap)) {
+      const d = zm[zk]||{};
+      const el = $(`#tc${label}Val`); if (el) el.textContent=`${(d.throughput_mbps||0).toFixed(2)} Mbps`;
+      const sub = $(`#tc${label}Sub`);
+      if (sub) { const u=d.max_utilization_pct||0; sub.textContent=`Util: ${u.toFixed(1)}% — ${d.congested?'⚠ CONGESTED':'Normal'}`; }
+    }
+    const hostChips={Staff:[],Server:[],Lab:[],Wifi:[]};
+    HOSTS.forEach(h=>{
+      const chip=`<span class="host-chip">${h.icon} ${h.label} (${h.ip})</span>`;
+      if(h.sw==='as1')hostChips.Staff.push(chip); else if(h.sw==='as2')hostChips.Server.push(chip);
+      else if(h.sw==='as3')hostChips.Lab.push(chip); else if(h.sw==='as4')hostChips.Wifi.push(chip);
+    });
+    for (const [k,chips] of Object.entries(hostChips)) { const el=$(`#tc${k}Hosts`); if(el) el.innerHTML=chips.join(''); }
+
+    // ── Overview KPIs ──
+    const sw = m.connected_switches||[];
+    $('#kvCtrl').textContent = sw.length>0?`${sw.length} Switches`:'Offline';
+    $('#ksCtrl').textContent  = sw.length>0?'Connected & healthy':'Waiting...';
+    let totalTput=0, zoneHtml='';
+    for (const [z,d] of Object.entries(zm)) {
+      totalTput += d.throughput_mbps||0;
+      const util=d.max_utilization_pct||0, cls=d.congested?'r':(util>50?'a':'g');
+      zoneHtml+=`<tr><td style="font-weight:600">${z.replace(/_/g,' ')}</td><td>${(d.throughput_mbps||0).toFixed(2)} Mbps</td><td><span class="stat-v ${cls}">${util.toFixed(1)}%</span></td><td>${d.congested?'⚠ Congested':(util>50?'Elevated':'Normal')}</td></tr>`;
+    }
+    $('#zoneTable').innerHTML = zoneHtml||'<tr><td colspan="4" style="color:var(--dim)">No zone data</td></tr>';
+    $('#kvTput').textContent = totalTput.toFixed(1);
+
+    // ── Analytics ──
+    const congCount = m.congested_ports_count||0;
+    $('#anTput').textContent=totalTput.toFixed(1); $('#anCong').textContent=congCount; $('#anFlows').textContent=m.flow_count||'—';
+    let zoneTxt=''; for(const[z,d]of Object.entries(zm)){zoneTxt+=`── ${z.toUpperCase()} ──\n  Throughput: ${(d.throughput_mbps||0).toFixed(2)} Mbps\n  Utilization: ${(d.max_utilization_pct||0).toFixed(1)}%\n  Congested: ${d.congested?'YES':'no'}\n\n`;}
+    $('#anZone').textContent = zoneTxt||'No zone data';
+    const maxUtil=Object.values(zm).reduce((a,d)=>Math.max(a,d.max_utilization_pct||0),0);
+    $('#anLat').textContent=(5+maxUtil*0.5).toFixed(1);
+
+    // ── Events / Logs ──
+    const evts=(m.events||[]).slice(-15).reverse();
+    if(evts.length>0){
+      $('#alertPane').textContent=evts.map(e=>`[${new Date(e.ts*1000).toLocaleTimeString()}] ${e.event}`).join('\n');
+      $('#evtLog').textContent=evts.map(e=>JSON.stringify(e,null,1)).join('\n---\n');
+    }
+
+    // ── Security ──
+    $('#secStatus').textContent=m.ddos_active?'⚠ ALERT':'✓ Secure';
+    $('#secBlocked').textContent=m.security_blocked||0;
+    $('#secDdos').textContent=m.ddos_active?'ACTIVE':'Clear';
+
+    // ── Link bars ──
+    const ps=m.switch_port_stats||{}; let barHtml='';
+    for(const[dpid,ports]of Object.entries(ps)){for(const[port,stats]of Object.entries(ports)){
+      const u=stats.util_pct||0, col=u>80?'var(--red)':(u>50?'var(--amber)':'var(--green)');
+      barHtml+=`<div class="bar-wrap"><div class="bar-label"><span>sw${dpid}:p${port}</span><span>${u.toFixed(1)}% (${(stats.mbps||0).toFixed(2)} Mbps)</span></div><div class="bar"><div class="bar-fill" style="width:${Math.min(100,u)}%;background:${col}"></div></div></div>`;
+    }}
+    $('#linkBars').innerHTML=barHtml||'<span style="color:var(--dim);font-size:12px">No port data</span>';
+
+    // ── Timetable ──
+    if(tt && tt.period) {
+      $('#ttPane').textContent=`Period: ${tt.period}\nDay: ${tt.day||'—'} Time: ${tt.time||'—'}\nExam Mode: ${tt.exam_flag?'ACTIVE':'inactive'}\nActive Slots: ${tt.slot_count||0}`;
+    } else if(tt && tt.current_period) {
+      $('#ttPane').textContent=`Period: ${tt.current_period}\nDay: ${tt.day||'—'} Time: ${tt.time||'—'}\nExam Mode: ${tt.exam_flag?'ACTIVE':'inactive'}`;
+    } else {
+      $('#ttPane').textContent='No timetable data';
+    }
+
+    // ── ML / DQN ──
+    const act = ml.action||ml.dqn?.action_name;
+    if(act){
+      $('#kvPolicy').textContent=(act||'').replace(/_/g,' ');
+      $('#ksPolicy').textContent=`ε=${(ml.epsilon||0).toFixed(3)} reward:${(ml.reward||0).toFixed(2)}`;
+      let txt=`Action: ${act}\nReward: ${(ml.reward||0).toFixed(2)}\nEpisode: ${ml.episode||'—'}\nEpsilon: ${(ml.epsilon||0).toFixed(4)}\n`;
+      if(ml.zone_utilization){txt+='\nZone utilization:\n';for(const[k,v]of Object.entries(ml.zone_utilization)){txt+=`  ${k}: ${v.toFixed(1)}%\n`;}}
+      if(ml.q_values){txt+='\nQ-values:\n';ml.q_values.forEach((v,i)=>{txt+=`  [${i}]: ${v.toFixed(3)}\n`;});}
+      $('#aiPane').textContent=txt; $('#anDqn').textContent=txt;
+    }
+
+    // ── PC Simulator ──
+    if(pc && pc.pcs) renderPcGrid(pc);
+    if(pcbCurrentHost && pc?.pcs?.[pcbCurrentHost]) updatePcbStatus(pc.pcs[pcbCurrentHost]);
+
+  }).catch(()=>{ $('#kvCtrl').textContent='Offline'; });
+}
+
+// WebSocket (supplements polling — only for push events)
+try{
+  const socket=io();
+  socket.on('metrics_update', ()=>{});
+  socket.on('pc_activities_update', data=>{ if(data&&data.pcs) renderPcGrid(data); });
+}catch(e){}
+
+// ─── STARTUP (moved to bottom — ACTIVITY_DEFS and pcState must be declared first) ───
+
+// ═══════════════════════════════════════════════════════════════
+//  PC SIMULATOR
+// ═══════════════════════════════════════════════════════════════
+
+const ACTIVITY_DEFS = {
+  idle:             {label:'Idle',            icon:'●', color:'#64748b', pri:5, desc:'No traffic', bw:0},
+  exam:             {label:'Online Exam',      icon:'E', color:'#ef4444', pri:1, desc:'High priority, latency-sensitive', bw:5},
+  video_conf:       {label:'Video Conf',       icon:'V', color:'#3b82f6', pri:1, desc:'Real-time UDP stream', bw:4},
+  elearning:        {label:'E-learning',       icon:'L', color:'#10b981', pri:2, desc:'Moodle / LMS access', bw:3},
+  video_streaming:  {label:'Streaming',        icon:'S', color:'#a855f7', pri:3, desc:'Academic video stream', bw:5},
+  file_download:    {label:'File Download',    icon:'D', color:'#f59e0b', pri:4, desc:'Bulk file transfer', bw:10},
+  social_media:     {label:'Social Media',     icon:'M', color:'#06b6d4', pri:5, desc:'Best-effort browsing', bw:1},
+  ddos_attack:      {label:'DDoS (Security)',  icon:'!', color:'#dc2626', pri:0, desc:'Security test scenario', bw:50},
+};
+const PRI_LABELS = {0:'ATTACK', 1:'CRITICAL', 2:'HIGH', 3:'MEDIUM', 4:'LOW', 5:'BEST-EFFORT'};
+
+const PC_DEFS = [
+  // Staff LAN — 3 PCs
+  {id:'h_staff1', label:'Staff-PC1', ip:'10.10.0.1', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff2', label:'Staff-PC2', ip:'10.10.0.2', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff3', label:'Staff-PC3', ip:'10.10.0.3', zone:'staff_lan',    role:'staff'},
+  // IT Lab — 3 PCs
+  {id:'h_lab1',   label:'Lab-PC1',   ip:'10.30.0.1', zone:'it_lab',       role:'student'},
+  {id:'h_lab2',   label:'Lab-PC2',   ip:'10.30.0.2', zone:'it_lab',       role:'student'},
+  {id:'h_lab3',   label:'Lab-PC3',   ip:'10.30.0.3', zone:'it_lab',       role:'student'},
+  // Student WiFi — 4 devices
+  {id:'h_wifi1',  label:'Student-PC1', ip:'10.40.0.1', zone:'student_wifi', role:'student'},
+  {id:'h_wifi2',  label:'Student-PC2', ip:'10.40.0.2', zone:'student_wifi', role:'student'},
+  {id:'h_wifi3',  label:'Student-PC3', ip:'10.40.0.3', zone:'student_wifi', role:'student'},
+  {id:'h_wifi4',  label:'Student-PC4', ip:'10.40.0.4', zone:'student_wifi', role:'student'},
+];
+
+const DEMO_SCENARIOS = {
+  canonical: [
+    {host:'h_staff1', activity:'exam'},
+    {host:'h_staff2', activity:'video_conf'},
+    {host:'h_staff3', activity:'elearning'},
+    {host:'h_wifi1',  activity:'video_streaming'},
+    {host:'h_wifi2',  activity:'file_download'},
+    {host:'h_wifi3',  activity:'social_media'},
+  ],
+  staff_heavy: [
+    {host:'h_staff1', activity:'exam'},
+    {host:'h_staff2', activity:'video_conf'},
+    {host:'h_staff3', activity:'file_download'},
+    {host:'h_lab1',   activity:'elearning'},
+    {host:'h_lab2',   activity:'video_streaming'},
+  ],
+  security_test: [
+    {host:'h_staff1', activity:'exam'},
+    {host:'h_wifi3',  activity:'ddos_attack'},
+    {host:'h_wifi4',  activity:'ddos_attack'},
+    {host:'h_staff2', activity:'video_conf'},
+    {host:'h_lab1',   activity:'elearning'},
+  ],
+  congestion: [
+    {host:'h_wifi1',  activity:'file_download'},
+    {host:'h_wifi2',  activity:'video_streaming'},
+    {host:'h_wifi3',  activity:'video_conf'},
+    {host:'h_wifi4',  activity:'file_download'},
+    {host:'h_lab1',   activity:'video_streaming'},
+    {host:'h_lab2',   activity:'exam'},
+  ],
+};
+
+// State
+let pcState = {};               // {hostId: {activity, traffic_mbps, priority, since_ts, ...}}
+let selectedPc = null;          // currently selected host id
+let activeZoneFilter = 'all';
+let lastBaseline = null;
+
+// ── Render PC grid ──────────────────────────────────────────────
+
+function renderPcGrid(data) {
+  if (!data || !data.pcs) return;
+  pcState = data.pcs;
+
+  // Update KPIs
+  let activeCt = 0, totalBw = 0, highPriCt = 0;
+  for (const [host, info] of Object.entries(pcState)) {
+    if (info.activity !== 'idle') activeCt++;
+    totalBw += info.traffic_mbps || 0;
+    if (info.priority <= 2 && info.activity !== 'idle') highPriCt++;
+  }
+  $('#pcKpiActive').textContent = activeCt;
+  $('#pcKpiTotal').textContent = totalBw.toFixed(1);
+  $('#pcKpiHighPri').textContent = highPriCt;
+
+  // Baseline KPI
+  if (data.baseline && data.baseline.captured_ts) {
+    const ago = Math.round((Date.now()/1000 - data.baseline.captured_ts) / 60);
+    $('#pcKpiBaseline').textContent = 'Captured';
+    $('#pcKpiBaselineSub').textContent = `${ago}m ago`;
+    lastBaseline = data.baseline;
+    renderBaselineComparison(data.baseline);
+  }
+
+  // Render cards
+  const grid = $('#pcGrid');
+  const filtered = PC_DEFS.filter(pc =>
+    activeZoneFilter === 'all' || pc.zone === activeZoneFilter
+  );
+
+  let html = '';
+  for (const pc of filtered) {
+    const info = pcState[pc.id] || {};
+    const act = info.activity || 'idle';
+    const def = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+    const bw = info.traffic_mbps || 0;
+    const maxBw = def.bw || 1;
+    const fillPct = Math.min(100, (bw / maxBw) * 100).toFixed(0);
+    const isSelected = pc.id === selectedPc ? ' selected' : '';
+    const isActive = act !== 'idle' ? ' active-traffic' : '';
+
+    html += `<div class="pc-card${isSelected}${isActive}" data-host="${pc.id}"
+      style="--c:${def.color}" onclick="selectPc('${pc.id}')">
+      <div class="pc-icon" style="--c:${def.color}">${def.icon}</div>
+      <div class="pc-name">${pc.label}</div>
+      <div class="pc-ip">${pc.ip}</div>
+      <div class="pc-activity-badge" style="--c:${def.color}">${def.label}</div>
+      <div class="pc-priority" style="color:${def.color}">${PRI_LABELS[def.pri]}</div>
+      <div class="pc-traffic-bar"><div class="pc-traffic-fill" style="width:${fillPct}%;background:${def.color}"></div></div>
+      <div class="pc-bw">${act !== 'idle' ? bw.toFixed(1)+' / '+maxBw+' Mbps' : '—'}</div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+
+  // Re-attach click listeners (already set via onclick attribute)
+  // Update config panel if a PC is selected
+  if (selectedPc && pcState[selectedPc]) {
+    updateConfigPanel(selectedPc, pcState[selectedPc]);
+  }
+}
+
+function selectPc(hostId) {
+  selectedPc = hostId;
+  const info = pcState[hostId] || {};
+  const pcDef = PC_DEFS.find(p => p.id === hostId) || {};
+
+  // Re-render grid to update selection highlight
+  renderPcGrid({pcs: pcState, baseline: lastBaseline ? {captured_ts: lastBaseline.captured_ts} : {}});
+
+  updateConfigPanel(hostId, info, pcDef);
+}
+
+function updateConfigPanel(hostId, info, pcDef) {
+  pcDef = pcDef || PC_DEFS.find(p => p.id === hostId) || {};
+  const act = info.activity || 'idle';
+  const def = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+
+  $('#cfgTitle').textContent = pcDef.label || hostId;
+  $('#cfgPcInfo').style.display = '';
+  $('#cfgPcMeta').textContent = `${pcDef.ip || ''} — ${(pcDef.zone || '').replace('_', ' ')} — ${pcDef.role || ''}`;
+  $('#cfgCurrentAct').textContent = def.label;
+  $('#cfgCurrentAct').style.setProperty('--c', def.color);
+  $('#cfgPriority').textContent = `P${def.pri}`;
+  $('#cfgPriority').style.setProperty('--c', def.color);
+
+  // Live stats
+  $('#cfgLiveStats').style.display = '';
+  $('#cfgLiveBw').textContent = act !== 'idle' ? `${(info.traffic_mbps||0).toFixed(2)} Mbps` : '—';
+  $('#cfgLivePri').textContent = PRI_LABELS[def.pri] || '—';
+  $('#cfgLiveDscp').textContent = info.dscp !== undefined ? info.dscp : '—';
+  if (info.since_ts) {
+    const secs = Math.round(Date.now()/1000 - info.since_ts);
+    $('#cfgLiveSince').textContent = secs < 60 ? `${secs}s ago` : `${Math.round(secs/60)}m ago`;
+  }
+  $('#cfgLiveZone').textContent = (info.zone||'—').replace(/_/g,' ');
+
+  // Activity buttons
+  let bHtml = '';
+  for (const [actId, actDef] of Object.entries(ACTIVITY_DEFS)) {
+    const isActive = actId === act ? ' active' : '';
+    bHtml += `<button class="act-btn${isActive}" data-host="${hostId}" data-act="${actId}"
+      style="--c:${actDef.color}" onclick="setActivity('${hostId}','${actId}')">
+      <div class="act-icon" style="--c:${actDef.color};background:${actDef.color}22">${actDef.icon}</div>
+      <div class="act-meta">
+        <span class="act-label">${actDef.label}</span>
+        <span class="act-desc">${actDef.desc}</span>
+      </div>
+      <span class="priority-badge" style="--c:${actDef.color};color:${actDef.color}">P${actDef.pri}</span>
+    </button>`;
+  }
+  $('#activityButtons').innerHTML = bHtml;
+}
+
+// ── Set Activity ────────────────────────────────────────────────
+
+function setActivity(host, activity) {
+  // Optimistic local update
+  if (pcState[host]) {
+    pcState[host].activity = activity;
+    pcState[host].traffic_mbps = activity === 'idle' ? 0 : (ACTIVITY_DEFS[activity]?.bw || 1) * 0.8;
+  }
+  renderPcGrid({pcs: pcState});
+  if (selectedPc === host) selectPc(host);
+
+  fetch('/api/set_activity', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({host, activity}),
+  }).then(r=>r.json()).then(d=>{
+    const log = `[${new Date().toLocaleTimeString()}] ${host} → ${activity}: ${d.ok ? 'OK' : d.error||d.note||'error'}`;
+    $('#simLog').textContent = log + '\n' + ($('#simLog').textContent||'').split('\n').slice(0,8).join('\n');
+  }).catch(e=>{
+    $('#simLog').textContent = `Error setting ${host}: ${e}`;
+  });
+}
+
+// ── Quick scenario ──────────────────────────────────────────────
+
+function applyScenario(name) {
+  const assignments = DEMO_SCENARIOS[name];
+  if (!assignments) return;
+
+  const log = `[${new Date().toLocaleTimeString()}] Applying scenario: ${name} (${assignments.length} PCs)...`;
+  $('#simLog').textContent = log;
+
+  fetch('/api/set_scenario', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({assignments}),
+  }).then(r=>r.json()).then(d=>{
+    const results = (d.results||[]).map(r=>r.host+':'+r.activity).join(', ');
+    $('#simLog').textContent = `[${new Date().toLocaleTimeString()}] ${name}: ${d.ok?'Applied':'Failed'} — ${results}`;
+    fetchPcActivities();
+  }).catch(e=>{ $('#simLog').textContent = `Scenario error: ${e}`; });
+}
+
+$$('.sq-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyScenario(btn.dataset.scenario));
+});
+
+// ── Zone filter ─────────────────────────────────────────────────
+
+function filterZone(zone) {
+  activeZoneFilter = zone;
+  $$('#zoneAll,#zoneStaff,#zoneLab,#zoneWifi').forEach(b=>b.classList.remove('active'));
+  const ids = {all:'#zoneAll', staff_lan:'#zoneStaff', it_lab:'#zoneLab', student_wifi:'#zoneWifi'};
+  if (ids[zone]) $(ids[zone]).classList.add('active');
+  renderPcGrid({pcs: pcState});
+}
+
+// ── Baseline ────────────────────────────────────────────────────
+
+$('#btnCapture').addEventListener('click', () => {
+  $('#btnCapture').textContent = 'Capturing...';
+  fetch('/api/capture_baseline', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      $('#btnCapture').textContent = '◎ Capture Baseline';
+      $('#simLog').textContent = d.ok
+        ? `[${new Date().toLocaleTimeString()}] Baseline captured.`
+        : `Baseline error: ${d.error}`;
+      fetchPcActivities();
+    }).catch(e=>{
+      $('#btnCapture').textContent = '◎ Capture Baseline';
+      $('#simLog').textContent = 'Baseline error: '+e;
+    });
+});
+
+$('#btnResetAll').addEventListener('click', () => {
+  if (!confirm('Reset all 10 PCs to idle?')) return;
+  fetch('/api/reset_activities', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      $('#simLog').textContent = `[${new Date().toLocaleTimeString()}] All PCs reset to idle.`;
+      fetchPcActivities();
+    }).catch(e=>{ $('#simLog').textContent = 'Reset error: '+e; });
+});
+
+// ── Baseline comparison renderer ────────────────────────────────
+
+function renderBaselineComparison(baseline) {
+  const panel = $('#baselineCompare');
+  if (!baseline || !baseline.captured_ts) { return; }
+
+  const bm = baseline.metrics || {};
+  const zm = bm.zone_metrics || {};
+
+  let html = '';
+  let activeCt = 0, totalBw = 0;
+  for (const [h, info] of Object.entries(pcState)) {
+    if (info.activity !== 'idle') { activeCt++; totalBw += info.traffic_mbps||0; }
+  }
+
+  // Active PCs comparison
+  const blActive = Object.keys(baseline.activities||{}).length;
+  html += blRow('Active PCs', blActive, activeCt, '');
+
+  // Total throughput
+  const blBw = Object.values(zm).reduce((a,z)=>a+(z.throughput_mbps||0), 0);
+  html += blRow('Total Throughput', blBw.toFixed(1)+' Mbps', totalBw.toFixed(1)+' Mbps', '');
+
+  // Per-zone rows
+  for (const [zone, data] of Object.entries(zm)) {
+    const cur = Object.values(pcState)
+      .filter(p=>p.zone===zone && p.activity!=='idle')
+      .reduce((a,p)=>a+(p.traffic_mbps||0), 0);
+    html += blRow(zone.replace(/_/g,' '),
+      (data.throughput_mbps||0).toFixed(1)+' M',
+      cur.toFixed(1)+' M', '');
+  }
+
+  panel.innerHTML = html ||
+    '<div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">No zone data in baseline</div>';
+  $('#baselinePanel').style.display = '';
+}
+
+function blRow(label, before, after, note) {
+  return `<div class="baseline-row">
+    <span class="bl-label">${label}</span>
+    <span class="bl-before">${before}</span>
+    <span style="color:var(--dim);font-size:10px">→</span>
+    <span class="bl-after">${after}</span>
+  </div>`;
+}
+
+// fetchPcActivities: thin wrapper used by capture_baseline handler
+function fetchPcActivities() { refresh(); }
+
+// ═══════════════════════════════════════════════════════════════
+//  PC BROWSER MODAL
+// ═══════════════════════════════════════════════════════════════
+
+// App definitions for the PC browser UI
+const PC_APPS = [
+  {activity:'exam',            icon:'📝', name:'Online Exam',      sub:'MIS/ERP System',    url:'https://mis.tumba.edu/exam',     color:'#ef4444'},
+  {activity:'video_conf',      icon:'📹', name:'Video Conference', sub:'Zoom / Teams',      url:'https://meet.tumba.edu',          color:'#3b82f6'},
+  {activity:'elearning',       icon:'📚', name:'E-Learning',       sub:'Moodle LMS',        url:'https://moodle.tumba.edu',        color:'#10b981'},
+  {activity:'video_streaming', icon:'📺', name:'YouTube / Video',  sub:'Video Streaming',   url:'https://youtube.com',             color:'#a855f7'},
+  {activity:'file_download',   icon:'📁', name:'File Download',    sub:'Campus Repository', url:'https://files.tumba.edu',         color:'#f59e0b'},
+  {activity:'social_media',    icon:'💬', name:'Social Media',     sub:'Facebook / Twitter',url:'https://social.tumba.edu',        color:'#06b6d4'},
+  {activity:'ddos_attack',     icon:'⚡', name:'Security Test',    sub:'DDoS Simulation',   url:'https://security.tumba.edu/test', color:'#dc2626'},
+  {activity:'idle',            icon:'⬜', name:'Close Apps',       sub:'Set to Idle',        url:'https://campus.tumba.edu',        color:'#64748b'},
+];
+
+let pcbCurrentHost = null;
+
+function openPcBrowser(hostId) {
+  const hDef = HOSTS.find(h => h.id === hostId);
+  if (!hDef) return;
+
+  pcbCurrentHost = hostId;
+  const pci = pcState[hostId] || {};
+  const act = pci.activity || 'idle';
+  const bw  = pci.traffic_mbps || 0;
+  const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+
+  $('#pcbTitle').textContent = `${hDef.label}  —  ${hDef.ip}`;
+
+  // Build app grid
+  let appsHtml = '';
+  PC_APPS.forEach(app => {
+    const isActive = app.activity === act;
+    const bwHint = app.activity !== 'idle' ? `~${ACTIVITY_DEFS[app.activity]?.bw||0}M` : '';
+    appsHtml += `<div class="pcb-app${isActive?' active-app':''}" style="color:${app.color};--app-rgb:${hexToRgb(app.color)}" onclick="activateApp('${app.activity}','${app.url}')">
+      <div class="pcb-app-icon">${app.icon}</div>
+      <div class="pcb-app-name" style="color:${isActive?app.color:'var(--txt)'}">${app.name}</div>
+      <div class="pcb-app-sub">${app.sub}</div>
+      ${bwHint?`<div class="pcb-app-bw" style="color:${app.color}">${bwHint}</div>`:''}
+      ${isActive?`<div style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:${app.color};animation:pulse 1.5s infinite"></div>`:''}
+    </div>`;
+  });
+  $('#pcbApps').innerHTML = appsHtml;
+
+  // Status bar
+  updatePcbStatus(pci);
+  $('#pcbModal').style.display = 'flex';
+}
+
+function closePcBrowser() {
+  $('#pcbModal').style.display = 'none';
+  pcbCurrentHost = null;
+}
+
+function activateApp(activity, url) {
+  if (!pcbCurrentHost) return;
+  // Update URL bar to look like user navigated
+  const app = PC_APPS.find(a => a.activity === activity);
+  if (app) $('#pcbUrl').textContent = app.url || url;
+
+  // Set activity via API
+  setActivity(pcbCurrentHost, activity);
+
+  // Optimistic UI update in modal
+  const actDef = ACTIVITY_DEFS[activity] || ACTIVITY_DEFS.idle;
+  const bwEst = actDef.bw * 0.8;
+  updatePcbStatus({activity, traffic_mbps: bwEst, priority: actDef.pri});
+
+  // Re-render app buttons to show new active state
+  $$('.pcb-app').forEach(el => el.classList.remove('active-app'));
+  // Rebuild apps to show active state
+  setTimeout(() => {
+    if (pcbCurrentHost) openPcBrowser(pcbCurrentHost);
+  }, 300);
+}
+
+function updatePcbStatus(pci) {
+  const act = pci.activity || 'idle';
+  const bw  = pci.traffic_mbps || 0;
+  const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+  const maxBw = actDef.bw || 1;
+  const pct = Math.min(100, (bw / maxBw) * 100);
+
+  $('#pcbCurAct').textContent = actDef.label;
+  $('#pcbCurAct').style.color = actDef.color;
+  $('#pcbBwVal').textContent = `${bw.toFixed(1)} Mbps`;
+  $('#pcbBwVal').style.color = actDef.color;
+  $('#pcbBwFill').style.width = `${pct}%`;
+  $('#pcbBwFill').style.background = actDef.color;
+  $('#pcbPriLabel').textContent = PRI_LABELS[actDef.pri] || 'Best-Effort';
+  $('#pcbPriLabel').style.color = actDef.color;
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+// ─── STARTUP — all const/let declarations above are initialized by this point ───
+setInterval(()=>drawTopology(null), 800);
+drawTopology(null);
+refresh();
+setInterval(refresh, 2000);
+$('#btnRefresh').addEventListener('click', refresh);
+$('#btnPingall').addEventListener('click', () => {
+  fetch('/api/pingall',{method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      alert(`Ping All: ${d.packet_loss_pct}% loss (${(d.pairs||[]).length} pairs)`);
+    }).catch(e=>alert('Ping failed: '+e));
+});
+
+</script>
+</body>
+</html>

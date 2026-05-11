@@ -1,0 +1,18 @@
+# Tumba College SDN — Python Dependencies
+# Install inside the sdn-env virtual environment:
+#   pip install -r requirements.txt
+
+# SDN Controller
+ryu>=4.34
+
+# Web Dashboard
+flask>=3.0
+flask-socketio>=5.3
+eventlet>=0.35
+
+# ML / Numerical
+numpy>=1.24
+torch>=2.0           # for DQN agent (optional — stub works without it)
+
+# Utilities
+requests>=2.31
