@@ -22,7 +22,7 @@ fail()  { echo -e "${RED}[FAIL]${NC}  $*"; }
 # ── 0. Clean previous run ────────────────────────────────────────────────────
 info "Cleaning previous Mininet state..."
 mn --clean 2>/dev/null | tail -1
-for port in 6653 9090 9091 9093 9095 9096 9097 9098 9099; do fuser -k ${port}/tcp 2>/dev/null; done
+for port in 6653 9090 9091 9093 9095 9096 9097 9098 9099 9100; do fuser -k ${port}/tcp 2>/dev/null; done
 pkill -f "ryu-manager" 2>/dev/null
 pkill -f "tumba_topo.py" 2>/dev/null
 pkill -f "pc_activity_manager.py" 2>/dev/null
@@ -31,6 +31,7 @@ pkill -f "auto_traffic.py" 2>/dev/null
 pkill -f "marl_security_agent.py" 2>/dev/null
 pkill -f "ibn_engine.py" 2>/dev/null
 pkill -f "data_mining.py" 2>/dev/null
+pkill -f "proactive_congestion.py" 2>/dev/null
 sleep 2
 
 # ── 1. Ryu SDN Controller ───────────────────────────────────────────────────
@@ -97,6 +98,13 @@ nohup "$PYTHON" "$PROJECT/tumba_sdn/ml/data_mining.py" --port 9099 \
 sleep 2
 if ss -tlnp | grep -q ':9099'; then ok "Data Mining Engine running (port 9099)"; else fail "Data Mining failed — see $LOGS/data_mining.log"; fi
 
+# ── 5e. Proactive Congestion Engine ──────────────────────────────────────────
+info "Starting Proactive Congestion Engine (port 9100)..."
+nohup "$PYTHON" "$PROJECT/tumba_sdn/controller/proactive_congestion.py" --port 9100 \
+    > "$LOGS/proactive_congestion.log" 2>&1 &
+sleep 2
+if ss -tlnp | grep -q ':9100'; then ok "Proactive Congestion Engine running (port 9100)"; else fail "Proactive Congestion failed — see $LOGS/proactive_congestion.log"; fi
+
 # ── 6. Web Dashboard ─────────────────────────────────────────────────────────
 info "Starting Web Dashboard (port 9090)..."
 nohup "$PYTHON" "$PROJECT/tumba_sdn/dashboard/app.py" --port 9090 \
@@ -113,8 +121,9 @@ echo "  PCAM API:       http://localhost:9095"
 echo "  AutoTraffic:    http://localhost:9097"
 echo "  IBN Engine:     http://localhost:9098"
 echo "  Data Mining:    http://localhost:9099"
+echo "  Proactive Cong: http://localhost:9100"
 echo ""
-echo "  New Tabs:       Intelligence | IBN Control"
+echo "  New Tabs:       Intelligence | Proactive Cong. | IBN Control"
 echo "  Logs:           $LOGS/"
 echo "────────────────────────────────────────────────────────────"
  

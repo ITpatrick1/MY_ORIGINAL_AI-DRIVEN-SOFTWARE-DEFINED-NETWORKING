@@ -155,10 +155,28 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 /* Alert dropdown */
 .alert-item{padding:8px 10px;border-radius:8px;margin-bottom:6px;border:1px solid var(--border);font-size:12px}
 .alert-item.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
+.alert-item.preventive{border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.06)}
 .alert-item.warning{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.alert-item.healthy{border-color:rgba(16,217,160,.3);background:rgba(16,217,160,.04)}
 .alert-title{font-weight:700;margin-bottom:2px}
 .alert-detail{color:var(--dim);font-size:11px}
 .alert-ts{font-size:10px;color:var(--dim);margin-top:3px}
+.alert-fields{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-top:4px;font-size:10px;color:var(--dim)}
+.alert-field-key{font-weight:600;color:#64748b}
+/* Proactive Congestion panel */
+.pcong-zone{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.pcong-zone-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.pcong-state-badge{font-size:10px;font-weight:800;padding:2px 10px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px}
+.pcong-state-badge.healthy{background:rgba(16,217,160,.15);color:#10d9a0;border:1px solid rgba(16,217,160,.3)}
+.pcong-state-badge.warning{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.pcong-state-badge.preventive{background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)}
+.pcong-state-badge.critical{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.pcong-bar{height:8px;background:var(--surface3);border-radius:4px;overflow:hidden;margin:4px 0}
+.pcong-bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.pcong-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:10px;color:var(--dim);margin-top:4px}
+.pcong-metric-val{font-weight:700;color:var(--txt);font-size:11px}
+.saturation-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:6px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.3);font-size:12px}
+.saturation-item.warning{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.3)}
 /* Threat badge */
 .threat-badge{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1px solid}
 .threat-badge.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
@@ -180,6 +198,7 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 <button class="nav-btn" data-page="pcsim"><span class="nav-icon">◉</span>PC Simulator</button>
 <div class="nav-label">AI & Intelligence</div>
 <button class="nav-btn" data-page="intelligence"><span class="nav-icon">◎</span>Intelligence</button>
+<button class="nav-btn" data-page="proactive"><span class="nav-icon">⚠</span>Proactive Cong.</button>
 <button class="nav-btn" data-page="ibn"><span class="nav-icon">✦</span>IBN Control</button>
 <div class="nav-label">Diagnostics</div>
 <button class="nav-btn" data-page="logs"><span class="nav-icon">≡</span>Logs & Events</button>
@@ -300,15 +319,17 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
   <filter id="glow"><feGaussianBlur stdDeviation="3" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
 </defs>
 </svg>
-<div style="display:flex;gap:16px;margin-top:8px;font-size:11px;color:var(--dim);flex-wrap:wrap">
+<div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--dim);flex-wrap:wrap;align-items:center">
 <span>◆ <b style="color:#3b82f6">Core Switch</b></span>
 <span>◆ <b style="color:#a855f7">Distribution</b></span>
 <span>◆ <b style="color:#10d9a0">Access Switch</b></span>
 <span>■ <b style="color:#06b6d4">Server</b></span>
 <span>● <b style="color:#94a3b8">End Device</b></span>
-<span style="margin-left:16px">━ <b style="color:#10d9a0">Normal</b></span>
-<span>━ <b style="color:#f59e0b">High</b></span>
-<span>━ <b style="color:#ef4444">Congested</b></span>
+<span style="margin-left:8px;border-left:1px solid var(--border);padding-left:8px">Link Utilization:</span>
+<span>━ <b style="color:#10d9a0">0–70% Normal</b></span>
+<span>━ <b style="color:#eab308">70–85% Warning</b></span>
+<span>━ <b style="color:#f97316">85–90% Preventive</b></span>
+<span>━ <b style="color:#ef4444">90–100% Critical</b></span>
 <span>● <b style="color:#22d3ee">Traffic flow</b></span>
 </div></div></div>
 <!-- Traffic stats per zone -->
@@ -599,6 +620,82 @@ pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;pa
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════════
+     PROACTIVE CONGESTION MANAGEMENT PAGE
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="pg-proactive">
+
+<!-- KPI bar -->
+<div class="kpi-row">
+  <div class="kpi g"><div class="kpi-label">Controller Link</div><div class="kpi-value" id="pcCtrlUtil">0%</div><div class="kpi-sub" id="pcCtrlMbps">0 / 1000 Mbps</div></div>
+  <div class="kpi b"><div class="kpi-label">Zones in Warning+</div><div class="kpi-value" id="pcWarnCount">0</div><div class="kpi-sub">≥70% utilization</div></div>
+  <div class="kpi a"><div class="kpi-label">Port Saturations</div><div class="kpi-value" id="pcSatCount">0</div><div class="kpi-sub">devices ≥85 Mbps</div></div>
+  <div class="kpi r"><div class="kpi-label">Active Alerts</div><div class="kpi-value" id="pcAlertCount">0</div><div class="kpi-sub">this cycle</div></div>
+</div>
+
+<!-- Threshold model legend -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">4-State Utilization Threshold Model</span></div>
+  <div class="card-body">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+      <div style="background:rgba(16,217,160,.08);border:1px solid rgba(16,217,160,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#10d9a0">0–70%</div>
+        <div style="font-size:11px;font-weight:700;color:#10d9a0;margin:4px 0">HEALTHY</div>
+        <div style="font-size:10px;color:var(--dim)">Monitor only</div>
+      </div>
+      <div style="background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#eab308">70–85%</div>
+        <div style="font-size:11px;font-weight:700;color:#eab308;margin:4px 0">WARNING</div>
+        <div style="font-size:10px;color:var(--dim)">Predict congestion</div>
+      </div>
+      <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#f97316">85–90%</div>
+        <div style="font-size:11px;font-weight:700;color:#f97316;margin:4px 0">PREVENTIVE</div>
+        <div style="font-size:10px;color:var(--dim)">Apply control actions</div>
+      </div>
+      <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#ef4444">90–100%</div>
+        <div style="font-size:11px;font-weight:700;color:#ef4444;margin:4px 0">CRITICAL</div>
+        <div style="font-size:10px;color:var(--dim)">Aggressive mitigation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Zone analysis grid -->
+<div class="grid2" style="margin-bottom:14px">
+  <div class="card">
+    <div class="card-head"><span class="card-title">Zone Threshold States</span><span style="font-size:10px;color:var(--dim)">Real-time · 2s refresh</span></div>
+    <div class="card-body" id="pcZoneStates"><div style="color:var(--dim);font-size:12px">Loading…</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">Future Load Prediction</span><span style="font-size:10px;color:var(--dim)">Current + Growth + Trend</span></div>
+    <div class="card-body" id="pcFutureLoad"><div style="color:var(--dim);font-size:12px">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Network aggregation chain -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Traffic Aggregation Chain</span><span style="font-size:10px;color:var(--dim)">Device → Access → Distribution → Controller</span></div>
+  <div class="card-body" id="pcAggChain">
+    <div style="color:var(--dim);font-size:12px">Loading…</div>
+  </div>
+</div>
+
+<!-- Edge device saturation -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Edge Device Saturation Detection</span><span style="font-size:10px;color:var(--dim)">PC ↔ Access Switch — 100 Mbps port capacity</span></div>
+  <div class="card-body" id="pcSatList"><div style="color:var(--dim);font-size:12px">No saturation detected</div></div>
+</div>
+
+<!-- Structured alerts -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Structured Alerts (§8 Format)</span><span style="font-size:10px;color:var(--dim)" id="pcAlertTs">—</span></div>
+  <div class="card-body" id="pcStructuredAlerts"><div style="color:var(--dim);font-size:12px">No alerts</div></div>
+</div>
+
+</div><!-- end pg-proactive -->
+
+<!-- ══════════════════════════════════════════════════════════════════════
      IBN CONTROL PAGE — Intent-Based Networking
      ══════════════════════════════════════════════════════════════════════ -->
 <div class="page" id="pg-ibn">
@@ -747,7 +844,7 @@ function linkMbps(src, dst, zm) {
   };
   const k = `${src}-${dst}`;
   if (lz[k]) return (zm[lz[k]]||{}).throughput_mbps||0;
-  // Core uplinks: sum the zones they serve
+  // Core uplinks: sum the zones they serve (aggregation)
   if (src==='cs1'||dst==='cs1') {
     const other = src==='cs1'?dst:src;
     if (other==='ds1') return ((zm.staff_lan||{}).throughput_mbps||0)+((zm.server_zone||{}).throughput_mbps||0);
@@ -755,11 +852,32 @@ function linkMbps(src, dst, zm) {
   }
   return 0;
 }
-function linkColor(mbps) {
-  if (mbps > 15) return '#ef4444';
-  if (mbps > 5)  return '#f59e0b';
-  if (mbps > 0.1) return '#10d9a0';
-  return '#1e3a5f';
+
+// Return link capacity in Mbps based on link type
+function linkCapacity(src, dst) {
+  // PC ↔ Access: 100 Mbps (handled in host-link draw)
+  // Access ↔ Distribution: 1000 Mbps
+  // Distribution ↔ Core: 1000 Mbps
+  const accessNodes = new Set(['as1','as2','as3','as4']);
+  const distNodes   = new Set(['ds1','ds2']);
+  if ((accessNodes.has(src) && distNodes.has(dst)) ||
+      (distNodes.has(src) && accessNodes.has(dst))) return 1000;
+  return 1000; // distribution ↔ core
+}
+
+// 4-state utilization color model (Req §4.2 & §9)
+// Green 0-70% | Yellow 70-85% | Orange 85-90% | Red 90-100%
+function utilColor(utilPct) {
+  if (utilPct >= 90) return '#ef4444';    // critical — red
+  if (utilPct >= 85) return '#f97316';    // preventive — orange
+  if (utilPct >= 70) return '#eab308';    // warning — yellow
+  if (utilPct >  0)  return '#10d9a0';    // healthy — green
+  return '#1e3a5f';                       // idle
+}
+
+function linkColor(mbps, capacityMbps) {
+  if (capacityMbps <= 0) return '#1e3a5f';
+  return utilColor(mbps / capacityMbps * 100);
 }
 function linkWidth(mbps) { return Math.max(1.5, Math.min(8, 1.5 + mbps * 0.35)); }
 
@@ -808,7 +926,9 @@ function drawTopology(metrics) {
   SW_LINKS.forEach(l => {
     const s = swMap[l.src], d = swMap[l.dst]; if (!s || !d) return;
     const mbps = linkMbps(l.src, l.dst, zm);
-    const col  = linkColor(mbps);
+    const cap  = linkCapacity(l.src, l.dst);
+    const util = cap > 0 ? mbps / cap * 100 : 0;
+    const col  = linkColor(mbps, cap);
     const w    = linkWidth(mbps);
     const mx   = (s.x + d.x) / 2, my = (s.y + d.y) / 2;
     const opacity = mbps > 0.1 ? 0.9 : 0.35;
@@ -816,13 +936,16 @@ function drawTopology(metrics) {
     // Link line
     html += `<line x1="${s.x}" y1="${s.y}" x2="${d.x}" y2="${d.y}" stroke="${col}" stroke-width="${w}" opacity="${opacity}" stroke-linecap="round"/>`;
 
-    // Mbps label bubble
-    const bwLabel = mbps > 0.05 ? `${mbps.toFixed(1)} Mbps` : 'idle';
-    const labelBg = mbps > 15 ? '#3a0d0d' : (mbps > 5 ? '#3a2800' : (mbps > 0.1 ? '#0a2a1a' : 'transparent'));
+    // Label: "X.X / 1000 Mbps (Z%)" — Req §9 format
     if (mbps > 0.05) {
-      html += `<rect x="${mx-22}" y="${my-9}" width="44" height="14" rx="7" fill="${labelBg}" opacity="0.9"/>`;
+      const bwLabel = `${mbps.toFixed(1)}/${cap} Mbps (${util.toFixed(1)}%)`;
+      const lblW = bwLabel.length * 5.2;
+      const labelBg = util >= 90 ? '#3a0d0d' : (util >= 85 ? '#2a1500' : (util >= 70 ? '#2a1f00' : '#0a2a1a'));
+      html += `<rect x="${mx - lblW/2}" y="${my-9}" width="${lblW}" height="14" rx="7" fill="${labelBg}" opacity="0.92"/>`;
+      html += `<text x="${mx}" y="${my+3}" text-anchor="middle" fill="${col}" font-size="8" font-weight="700">${bwLabel}</text>`;
+    } else {
+      html += `<text x="${mx}" y="${my+3}" text-anchor="middle" fill="${col}" font-size="8" opacity="0.5">idle</text>`;
     }
-    html += `<text x="${mx}" y="${my+3}" text-anchor="middle" fill="${col}" font-size="8.5" font-weight="700">${bwLabel}</text>`;
 
     // Animated traffic dots
     if (mbps > 0.1) {
@@ -835,7 +958,7 @@ function drawTopology(metrics) {
     }
   });
 
-  // ── Host-to-switch links ───────────────────────────────────────
+  // ── Host-to-switch links — per-device traffic labels ON link ───
   HOSTS.forEach(h => {
     const sw = swMap[h.sw]; if (!sw) return;
     const hp = hostPos[h.id]; if (!hp) return;
@@ -843,13 +966,37 @@ function drawTopology(metrics) {
     const act = pci ? pci.activity : 'idle';
     const bw  = pci ? (pci.traffic_mbps || 0) : 0;
     const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
-    const lColor = act !== 'idle' ? actDef.color : '#1a2a40';
-    const lWidth = act !== 'idle' ? Math.max(1.5, 1.5 + bw * 0.12) : 1;
-    html += `<line x1="${sw.x}" y1="${sw.y+18}" x2="${hp.x}" y2="${hp.y-14}" stroke="${lColor}" stroke-width="${lWidth}" stroke-dasharray="${act==='idle'?'3,4':'none'}" opacity="${act!=='idle'?0.7:0.3}"/>`;
+
+    // 4-state color from utilization % (100 Mbps port capacity)
+    const devUtil = bw / 100 * 100;  // % of 100 Mbps
+    const lColor  = act !== 'idle' ? utilColor(devUtil) : '#1a2a40';
+    const lWidth  = act !== 'idle' ? Math.max(1.5, 1.5 + bw * 0.12) : 1;
+
+    // Link line
+    html += `<line x1="${sw.x}" y1="${sw.y+18}" x2="${hp.x}" y2="${hp.y-14}" stroke="${lColor}" stroke-width="${lWidth}" stroke-dasharray="${act==='idle'?'3,4':'none'}" opacity="${act!=='idle'?0.75:0.3}"/>`;
+
+    // Per-device label ON the link midpoint — Req §2.1
+    // Format: "2.4 Mbps (E-learning)" and below "/ 100 Mbps (2.4%)"
+    if (act !== 'idle' && bw > 0.3) {
+      const lmx = (sw.x + hp.x) / 2;
+      const lmy = (sw.y + 18 + hp.y - 14) / 2;
+      const trafficLabel = actDef.label.length > 10 ? actDef.label.substring(0, 10) : actDef.label;
+      const line1 = `${bw.toFixed(1)} Mbps`;
+      const line2 = `${trafficLabel} (${devUtil.toFixed(0)}%)`;
+      const lblBg = devUtil >= 90 ? '#3a0d0d' : (devUtil >= 85 ? '#2a1200' : (devUtil >= 70 ? '#2a1f00' : '#0a1a12'));
+      const lblW1 = line1.length * 5.5 + 8;
+      const lblW2 = line2.length * 4.8 + 8;
+      const lblW  = Math.max(lblW1, lblW2);
+      html += `<rect x="${lmx - lblW/2}" y="${lmy-14}" width="${lblW}" height="22" rx="5" fill="${lblBg}" opacity="0.88"/>`;
+      html += `<text x="${lmx}" y="${lmy-4}" text-anchor="middle" fill="${lColor}" font-size="7.5" font-weight="700">${line1}</text>`;
+      html += `<text x="${lmx}" y="${lmy+6}" text-anchor="middle" fill="${lColor}" font-size="7" opacity="0.85">${line2}</text>`;
+    }
+
+    // Animated traffic dot
     if (act !== 'idle' && bw > 0.5) {
       const t = ((topoAnimFrame * 4 + h.id.length * 13) % 100) / 100;
       const dx = sw.x + (hp.x - sw.x) * t, dy = (sw.y + 18) + (hp.y - 14 - sw.y - 18) * t;
-      html += `<circle cx="${dx}" cy="${dy}" r="2.5" fill="${actDef.color}" opacity="0.9"/>`;
+      html += `<circle cx="${dx}" cy="${dy}" r="2.5" fill="${lColor}" opacity="0.9"/>`;
     }
   });
 
@@ -1654,12 +1801,25 @@ function renderAlertList(alerts) {
     $('#alertList').innerHTML = '<div style="color:var(--dim);font-size:12px;padding:8px">No recent alerts</div>';
     return;
   }
-  $('#alertList').innerHTML = alerts.slice(-10).reverse().map(a => `
-    <div class="alert-item ${a.severity}">
-      <div class="alert-title" style="color:${a.severity==='critical'?'var(--red)':'var(--amber)'}">${a.severity==='critical'?'🔴':'🟡'} ${a.title}</div>
+  const sevIcon  = {critical:'🔴', preventive:'🟠', warning:'🟡', healthy:'🟢'};
+  const sevColor = {critical:'#ef4444', preventive:'#f97316', warning:'#f59e0b', healthy:'#10d9a0'};
+  $('#alertList').innerHTML = alerts.slice(-10).reverse().map(a => {
+    const icon = sevIcon[a.severity] || '⚪';
+    const col  = sevColor[a.severity] || '#64748b';
+    const extraFields = (a.device && a.action_taken) ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:4px;font-size:10px;color:var(--dim)">
+        <span><b>Device:</b> ${a.device}</span>
+        <span><b>Util:</b> ${(a.utilization_pct||0).toFixed(1)}%</span>
+        <span><b>Type:</b> ${a.traffic_type||'—'}</span>
+        <span><b>Risk:</b> ${(a.risk_level||'').split('—')[0]||'—'}</span>
+      </div>` : '';
+    return `<div class="alert-item ${a.severity}">
+      <div class="alert-title" style="color:${col}">${icon} ${a.title||a.device||'Alert'}</div>
       <div class="alert-detail">${a.detail}</div>
+      ${extraFields}
       <div class="alert-ts">${new Date(a.ts*1000).toLocaleTimeString()}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
 
 function renderThreats(alerts) {
@@ -1828,6 +1988,203 @@ function refreshHistory() {
   }).catch(()=>{});
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  PROACTIVE CONGESTION PAGE
+// ═══════════════════════════════════════════════════════════════
+function refreshProactiveCongestion() {
+  fetch('/api/proactive_congestion').then(r=>r.json()).then(pc=>{
+    const zones = pc.zones || {};
+    const agg   = pc.network_aggregation || {};
+    const sats  = pc.device_saturation || [];
+    const alerts = pc.recent_alerts || [];
+
+    // ── KPI bar ──
+    const ctrlUtil = agg.controller_link_util_pct || 0;
+    const ctrlMbps = agg.total_throughput_mbps || 0;
+    $('#pcCtrlUtil').textContent = `${ctrlUtil.toFixed(1)}%`;
+    $('#pcCtrlMbps').textContent = `${ctrlMbps.toFixed(1)} / 1000 Mbps`;
+    $('#pcCtrlUtil').style.color = utilColorCSS(ctrlUtil);
+    const warnCount = Object.values(zones).filter(z=>z.threshold_state!=='healthy').length;
+    $('#pcWarnCount').textContent = warnCount;
+    $('#pcSatCount').textContent  = sats.length;
+    $('#pcAlertCount').textContent = pc.new_alerts_this_cycle || alerts.length;
+
+    // ── Zone threshold states ──
+    const stateEl = $('#pcZoneStates');
+    if (stateEl) {
+      const zoneColors = {healthy:'#10d9a0', warning:'#eab308', preventive:'#f97316', critical:'#ef4444'};
+      const zoneNames  = {staff_lan:'Staff LAN', server_zone:'Server Zone', it_lab:'IT Lab', student_wifi:'Student WiFi'};
+      stateEl.innerHTML = Object.entries(zones).map(([k,z])=>{
+        const col   = zoneColors[z.threshold_state] || '#64748b';
+        const util  = z.utilization_pct || 0;
+        const mbps  = z.throughput_mbps || 0;
+        const cap   = z.uplink_capacity_mbps || 1000;
+        const action= z.recommended_action || 'Monitor';
+        return `<div class="pcong-zone">
+          <div class="pcong-zone-header">
+            <span style="font-weight:700;font-size:13px">${zoneNames[k]||k}</span>
+            <span class="pcong-state-badge ${z.threshold_state}">${z.threshold_state.toUpperCase()}</span>
+          </div>
+          <div style="font-size:11px;color:var(--dim);margin-bottom:4px">${mbps.toFixed(2)} Mbps / ${cap} Mbps — ${util.toFixed(1)}% utilization</div>
+          <div class="pcong-bar"><div class="pcong-bar-fill" style="width:${Math.min(100,util)}%;background:${col}"></div></div>
+          <div class="pcong-metrics">
+            <div><div class="pcong-metric-val">${(z.latency_ms||0).toFixed(1)} ms</div><div>Latency</div></div>
+            <div><div class="pcong-metric-val">${(z.loss_pct||0).toFixed(2)}%</div><div>Loss</div></div>
+            <div><div class="pcong-metric-val">${z.device_count||0}</div><div>Devices</div></div>
+          </div>
+          <div style="font-size:10px;color:${col};margin-top:5px;font-weight:600">▶ ${action}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Future load prediction ──
+    const futEl = $('#pcFutureLoad');
+    if (futEl) {
+      futEl.innerHTML = Object.entries(zones).map(([k,z])=>{
+        const fl     = z.future_load || {};
+        const cur    = (fl.current_util_pct || z.utilization_pct || 0).toFixed(1);
+        const proj   = (fl.projected_util_pct || 0).toFixed(1);
+        const gr     = fl.growth_rate_pct !== undefined ? fl.growth_rate_pct : (z.growth_rate_pct || 0);
+        const ema    = (fl.historical_ema_pct || 0).toFixed(1);
+        const risk   = fl.risk || z.predicted_congestion;
+        const col    = risk ? '#f97316' : '#10d9a0';
+        const zn     = {staff_lan:'Staff LAN', server_zone:'Server Zone', it_lab:'IT Lab', student_wifi:'WiFi'}[k]||k;
+        return `<div style="border-bottom:1px solid var(--border);padding:8px 0">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-weight:700;font-size:12px">${zn}</span>
+            <span style="font-size:10px;color:${col};font-weight:600">${risk?'⚠ RISK':'✓ Stable'}</span>
+          </div>
+          <div style="font-size:10px;color:var(--dim);display:grid;grid-template-columns:1fr 1fr;gap:2px">
+            <span>Current: <b style="color:var(--txt)">${cur}%</b></span>
+            <span>Projected: <b style="color:${col}">${proj}%</b></span>
+            <span>Growth: <b style="color:${parseFloat(gr)>0?'#f97316':'#10d9a0'}">${parseFloat(gr)>0?'+':''}${parseFloat(gr).toFixed(3)}%/s</b></span>
+            <span>EMA: <b style="color:var(--txt)">${ema}%</b></span>
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-top:3px">
+            Future Load = ${cur}% + (growth × 5) + (EMA trend) = <b style="color:${col}">${proj}%</b>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Aggregation chain ──
+    const aggEl = $('#pcAggChain');
+    if (aggEl) {
+      const zoneList = Object.values(zones);
+      const ds1Mbps  = (zones.staff_lan?.throughput_mbps||0) + (zones.server_zone?.throughput_mbps||0);
+      const ds2Mbps  = (zones.it_lab?.throughput_mbps||0) + (zones.student_wifi?.throughput_mbps||0);
+      const totalMbps = ctrlMbps;
+      const stateClr = {'healthy':'#10d9a0','warning':'#eab308','preventive':'#f97316','critical':'#ef4444'};
+
+      aggEl.innerHTML = `
+        <div style="font-size:11px;color:var(--dim);margin-bottom:10px">
+          Formula: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">Access_Uplink = Σ(device traffic) → Distribution_Uplink = Σ(access uplinks) → Controller = Σ(distribution uplinks)</code>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-size:11px">
+          ${zoneList.map(z=>{
+            const col = stateClr[z.threshold_state]||'#64748b';
+            const zn = {staff_lan:'Staff LAN',server_zone:'Server Zone',it_lab:'IT Lab',student_wifi:'WiFi'}[z.zone]||z.zone;
+            return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase">${zn}</div>
+              <div style="font-size:15px;font-weight:800;color:${col};margin:4px 0">${(z.throughput_mbps||0).toFixed(1)}</div>
+              <div style="font-size:9px;color:var(--dim)">Mbps (${(z.utilization_pct||0).toFixed(1)}%)</div>
+              <div style="font-size:9px;color:var(--dim);margin-top:3px">${z.device_count||0} devices</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0;font-size:11px;color:var(--dim)">
+          <span>↓ Aggregated</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:#a855f7;font-weight:700">Distribution DS1</div>
+            <div style="font-size:18px;font-weight:800;color:#a855f7;margin:4px 0">${ds1Mbps.toFixed(1)} Mbps</div>
+            <div style="font-size:10px;color:var(--dim)">Staff + Server / 1000 Mbps (${(ds1Mbps/10).toFixed(1)}%)</div>
+          </div>
+          <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:#a855f7;font-weight:700">Distribution DS2</div>
+            <div style="font-size:18px;font-weight:800;color:#a855f7;margin:4px 0">${ds2Mbps.toFixed(1)} Mbps</div>
+            <div style="font-size:10px;color:var(--dim)">Lab + WiFi / 1000 Mbps (${(ds2Mbps/10).toFixed(1)}%)</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin:8px 0;font-size:11px;color:var(--dim)">↓ SDN Controller link</div>
+        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:#3b82f6;font-weight:700">SDN Controller — 1 Gbps backbone</div>
+          <div style="font-size:22px;font-weight:800;color:${utilColorCSS(ctrlUtil)};margin:4px 0">${totalMbps.toFixed(1)} Mbps</div>
+          <div style="font-size:10px;color:var(--dim)">${ctrlUtil.toFixed(2)}% of 1000 Mbps</div>
+          <div class="pcong-bar" style="margin-top:6px"><div class="pcong-bar-fill" style="width:${Math.min(100,ctrlUtil)}%;background:${utilColorCSS(ctrlUtil)}"></div></div>
+        </div>`;
+    }
+
+    // ── Port saturation ──
+    const satEl = $('#pcSatList');
+    if (satEl) {
+      if (!sats.length) {
+        satEl.innerHTML = '<div style="color:#10d9a0;font-size:12px">✓ No port saturation detected — all devices within 100 Mbps capacity</div>';
+      } else {
+        satEl.innerHTML = sats.map(s=>{
+          const col = s.severity==='critical' ? '#ef4444' : '#f59e0b';
+          return `<div class="saturation-item ${s.severity==='warning'?'warning':''}">
+            <span style="font-size:18px">${s.severity==='critical'?'🔴':'🟡'}</span>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:13px;color:${col}">${s.label||s.pc_id}</div>
+              <div style="font-size:11px;color:var(--dim)">${s.traffic_mbps} Mbps / 100 Mbps — ${s.utilization_pct}% utilization</div>
+              <div style="font-size:10px;color:var(--dim)">Activity: ${s.activity||'unknown'}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:14px;font-weight:800;color:${col}">${s.utilization_pct}%</div>
+              <div style="font-size:9px;color:${col};font-weight:700;text-transform:uppercase">${s.severity==='critical'?'PORT SATURATION':'High Usage'}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // ── Structured alerts ──
+    const saEl = $('#pcStructuredAlerts');
+    const tsEl = $('#pcAlertTs');
+    if (saEl) {
+      if (tsEl && pc.ts) tsEl.textContent = `Updated: ${new Date(pc.ts*1000).toLocaleTimeString()}`;
+      const sevColor = {critical:'#ef4444', preventive:'#f97316', warning:'#eab308', healthy:'#10d9a0'};
+      if (!alerts.length) {
+        saEl.innerHTML = '<div style="color:#10d9a0;font-size:12px">✓ No alerts this cycle</div>';
+      } else {
+        saEl.innerHTML = alerts.slice(-10).reverse().map(a=>{
+          const col  = sevColor[a.severity] || '#64748b';
+          const icon = {critical:'🔴', preventive:'🟠', warning:'🟡', healthy:'🟢'}[a.severity] || '⚪';
+          return `<div class="alert-item ${a.severity}" style="margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span style="font-weight:800;font-size:12px;color:${col}">${icon} ${(a.severity||'').toUpperCase()}</span>
+              <span style="font-size:10px;color:var(--dim)">${new Date((a.ts||0)*1000).toLocaleTimeString()}</span>
+            </div>
+            <div class="alert-fields">
+              <div><span class="alert-field-key">Device/Link:</span> ${a.device||'—'}</div>
+              <div><span class="alert-field-key">Utilization:</span> ${(a.utilization_pct||0).toFixed(1)}%</div>
+              <div><span class="alert-field-key">Traffic Type:</span> ${a.traffic_type||'—'}</div>
+              <div><span class="alert-field-key">Risk Level:</span> ${a.risk_level||'—'}</div>
+              <div style="grid-column:1/-1"><span class="alert-field-key">Prediction:</span> ${a.prediction||'—'}</div>
+              <div style="grid-column:1/-1"><span class="alert-field-key">Action Taken:</span> ${a.action_taken||'—'}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+  }).catch(()=>{
+    const el = $('#pcZoneStates');
+    if (el) el.innerHTML = '<div style="color:var(--dim);font-size:12px">Proactive Congestion service offline — deriving from metrics…</div>';
+  });
+}
+
+// Helper: CSS color from utilization %
+function utilColorCSS(pct) {
+  if (pct >= 90) return '#ef4444';
+  if (pct >= 85) return '#f97316';
+  if (pct >= 70) return '#eab308';
+  if (pct >  0)  return '#10d9a0';
+  return '#64748b';
+}
+
 // ─── STARTUP — all const/let declarations above are initialized by this point ───
 initCharts();
 setInterval(()=>drawTopology(null), 800);
@@ -1839,10 +2196,12 @@ setInterval(refreshHistory, 6000);
 setInterval(refreshAutoTraffic, 8000);
 setInterval(refreshSecurity, 4000);
 setInterval(refreshFlows, 3000);
+setInterval(refreshProactiveCongestion, 4000);
 refreshAlerts();
 refreshHistory();
 refreshAutoTraffic();
 refreshSecurity();
+refreshProactiveCongestion();
 refreshFlows();
 
 // ══════════════════════════════════════════════════════════════════════════

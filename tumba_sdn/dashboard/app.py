@@ -16,11 +16,13 @@ TOPO_STATE    = os.environ.get('CAMPUS_TOPOLOGY_STATE_FILE', '/tmp/campus_topolo
 PC_ACTIVITIES = os.environ.get('CAMPUS_PC_ACTIVITIES_FILE',  '/tmp/campus_pc_activities.json')
 BASELINE      = os.environ.get('CAMPUS_BASELINE_FILE',       '/tmp/campus_baseline.json')
 AUTO_TRAFFIC  = os.environ.get('CAMPUS_AUTO_TRAFFIC_FILE',   '/tmp/campus_auto_traffic_state.json')
+PROACTIVE_CONG = os.environ.get('CAMPUS_PROACTIVE_CONG_FILE', '/tmp/campus_proactive_congestion.json')
 TOPO_API      = os.environ.get('CAMPUS_TOPO_API',            'http://127.0.0.1:9091')
 PCAM_API      = os.environ.get('CAMPUS_PCAM_API',            'http://127.0.0.1:9095')
 AUTO_API      = os.environ.get('CAMPUS_AUTO_TRAFFIC_API',    'http://127.0.0.1:9097')
 IBN_API       = os.environ.get('CAMPUS_IBN_API',             'http://127.0.0.1:9098')
 DM_API        = os.environ.get('CAMPUS_DM_API',              'http://127.0.0.1:9099')
+PROACTIVE_API = os.environ.get('CAMPUS_PROACTIVE_API',       'http://127.0.0.1:9100')
 SEC_ACTION    = os.environ.get('CAMPUS_SEC_ACTION_FILE',     '/tmp/campus_security_action.json')
 IBN_STATE     = os.environ.get('CAMPUS_IBN_STATE_FILE',      '/tmp/campus_ibn_state.json')
 
@@ -97,52 +99,98 @@ def _collect_history():
         _check_alerts(m, ml)
 
 def _check_alerts(m: dict, ml: dict):
+    """Generate structured alerts matching Master SDN requirements format."""
     zm  = m.get('zone_metrics', {})
     now = time.time()
+    action = ml.get('action', 'normal_mode')
 
-    def _add_alert(severity: str, title: str, detail: str):
-        _alerts.append({'ts': now, 'severity': severity, 'title': title, 'detail': detail})
+    def _add(severity: str, device: str, util: float, traffic_type: str,
+             risk_level: str, prediction: str, action_taken: str, title: str = ''):
+        entry = {
+            'ts':              now,
+            'severity':        severity,
+            # Legacy fields (keep for backward compatibility with existing UI)
+            'title':           title or f'{severity.upper()} — {device}',
+            'detail':          f'{util:.1f}% · {traffic_type} · {prediction}',
+            # Full structured fields (Master SDN requirements §8)
+            'device':          device,
+            'utilization_pct': round(util, 1),
+            'traffic_type':    traffic_type,
+            'risk_level':      risk_level,
+            'prediction':      prediction,
+            'action_taken':    action_taken,
+        }
+        _alerts.append(entry)
         while len(_alerts) > 50:
             _alerts.pop(0)
 
     for zone in ZONES:
-        zd = zm.get(zone, {})
-        util = zd.get('max_utilization_pct', 0)
-        tput = zd.get('throughput_mbps', 0)
-        if zd.get('congested'):
-            _add_alert('critical', f'Congestion — {zone.replace("_"," ").title()}',
-                       f'{util:.1f}% utilisation · {tput:.2f} Mbps')
-        elif zd.get('predicted_congestion'):
-            _add_alert('warning', f'Congestion Predicted — {zone.replace("_"," ").title()}',
-                       f'EMA {zd.get("util_ema",0):.1f}% trending up')
+        zd         = zm.get(zone, {})
+        util       = zd.get('max_utilization_pct', 0)
+        tput       = zd.get('throughput_mbps', 0)
+        growth     = zd.get('growth_rate_pct', 0)
+        predicted  = zd.get('predicted_util_pct', util)
+        thr_state  = zd.get('threshold_state', 'healthy')
+        zone_name  = zone.replace('_', ' ').title()
+
+        if zd.get('congested') or thr_state == 'critical':
+            _add('critical', f'{zone_name} Uplink', util,
+                 'Aggregated Traffic',
+                 'CRITICAL — Link congested, packet loss imminent',
+                 f'Predicted load: {predicted:.1f}% — immediate action required',
+                 f'ML action: {action} | Rate-limiting + flow rerouting active')
+
+        elif thr_state == 'preventive' or zd.get('predicted_congestion'):
+            _add('preventive', f'{zone_name} Uplink', util,
+                 'Aggregated Traffic',
+                 'PREVENTIVE — Congestion predicted before it occurs',
+                 f'Growth: {growth:+.2f}%/sample → projected {predicted:.1f}% in ~10 s',
+                 f'Proactive QoS applied — {action}')
+
+        elif thr_state == 'warning':
+            _add('warning', f'{zone_name} Uplink', util,
+                 'Aggregated Traffic',
+                 'WARNING — Utilization rising toward threshold',
+                 f'EMA: {zd.get("util_ema", util):.1f}% · growth {growth:+.2f}%/sample',
+                 'Monitoring — QoS pre-staging ready')
 
     if m.get('ddos_active'):
-        _add_alert('critical', 'DDoS Detected',
-                   f"Blocked: {m.get('security_blocked',0)} flows")
+        _add('critical', 'DDoS Attack Source', 100.0,
+             'Attack Traffic',
+             'CRITICAL — Volumetric DDoS detected',
+             f"Blocked flows: {m.get('security_blocked', 0)}",
+             'DDoS mitigation active — source rate-limited and isolated')
 
-    action = ml.get('action', '')
     if action in ('security_isolation_wifi', 'emergency_staff_protection',
                   'emergency_server_protection'):
-        _add_alert('warning', f'AI Action: {action.replace("_"," ").title()}',
-                   f'reward={ml.get("reward",0):.2f} ε={ml.get("epsilon",0):.3f}')
+        _add('preventive', 'SDN Controller', 0.0,
+             'Security Action',
+             'PREVENTIVE — AI emergency response triggered',
+             f'reward={ml.get("reward", 0):.2f} ε={ml.get("epsilon", 0):.3f}',
+             f'AI action applied: {action.replace("_", " ").title()}')
 
     sec_evts = m.get('security_events', [])
     for evt in sec_evts[-5:]:
         if evt.get('event') == 'arp_spoofing_detected':
-            _add_alert('critical', 'ARP Spoofing Detected',
-                       f"IP {evt.get('ip')} — spoof MAC {evt.get('spoof_mac')}")
+            _add('critical', f"IP {evt.get('ip', '?')}", 100.0,
+                 'ARP Spoofing', 'CRITICAL — ARP table poisoning',
+                 f"Spoof MAC: {evt.get('spoof_mac', '?')}",
+                 'Flow drop rule installed')
         elif evt.get('event') == 'mac_flooding_detected':
-            _add_alert('critical', 'MAC Flooding Detected',
-                       f"dpid={evt.get('dpid')} port={evt.get('port')} "
-                       f"{evt.get('mac_count',0)} MACs")
+            _add('critical', f"SW dpid={evt.get('dpid', '?')} port={evt.get('port', '?')}", 100.0,
+                 'MAC Flooding', 'CRITICAL — MAC table overflow attack',
+                 f"{evt.get('mac_count', 0)} MACs on one port",
+                 'Port rate-limited')
         elif evt.get('event') == 'port_scan_detected':
-            _add_alert('critical', f'Port Scan — {evt.get("zone","?")}',
-                       f"src={evt.get('src_ip')} {evt.get('ports_scanned',0)} ports "
-                       f"@ {evt.get('pps',0):.1f} pps · confidence {evt.get('confidence',0)}%")
+            _add('critical', f"src={evt.get('src_ip', '?')} ({evt.get('zone', '?')})", 0.0,
+                 'Port Scan', 'CRITICAL — Reconnaissance attack detected',
+                 f"{evt.get('ports_scanned', 0)} ports @ {evt.get('pps', 0):.1f} pps · {evt.get('confidence', 0)}% confidence",
+                 'Source blocked — scan-block flow rule installed')
         elif evt.get('event') == 'network_sweep_detected':
-            _add_alert('warning', f'Network Sweep — {evt.get("zone","?")}',
-                       f"src={evt.get('src_ip')} probed {evt.get('ip_count',0)} IPs "
-                       f"· confidence {evt.get('confidence',0)}%")
+            _add('warning', f"src={evt.get('src_ip', '?')} ({evt.get('zone', '?')})", 0.0,
+                 'Network Sweep', 'WARNING — Host discovery sweep',
+                 f"Probed {evt.get('ip_count', 0)} IPs · {evt.get('confidence', 0)}% confidence",
+                 'Rate-limiting applied')
 
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
@@ -246,8 +294,54 @@ def api_history():
 
 @app.route('/api/alerts')
 def api_alerts():
-    """Return recent generated alerts."""
+    """Return recent generated alerts (structured format, §8 compliance)."""
     return jsonify({'alerts': _alerts[-20:], 'count': len(_alerts)})
+
+@app.route('/api/proactive_congestion')
+def api_proactive_congestion():
+    """Full proactive congestion state: 4-state model, future load, saturation."""
+    pc = _read(PROACTIVE_CONG)
+    if pc:
+        return jsonify(pc)
+    # Fallback: derive from live metrics
+    m  = _read(METRICS)
+    zm = m.get('zone_metrics', {})
+    zones = {}
+    for z, zd in zm.items():
+        util  = zd.get('max_utilization_pct', 0)
+        state = ('critical' if util >= 90 else
+                 'preventive' if util >= 85 else
+                 'warning' if util >= 70 else 'healthy')
+        color = {'healthy':'green','warning':'yellow','preventive':'orange','critical':'red'}[state]
+        zones[z] = {
+            'zone': z,
+            'utilization_pct': util,
+            'throughput_mbps': zd.get('throughput_mbps', 0),
+            'threshold_state': state,
+            'threshold_color': color,
+            'growth_rate_pct': zd.get('growth_rate_pct', 0),
+            'predicted_util_pct': zd.get('predicted_util_pct', util),
+            'uplink_capacity_mbps': 1000,
+            'uplink_util_pct': round(zd.get('throughput_mbps', 0) / 10, 2),
+        }
+    total = sum(zd.get('throughput_mbps', 0) for zd in zm.values())
+    return jsonify({
+        'ts': time.time(), 'zones': zones,
+        'network_aggregation': {
+            'total_throughput_mbps': round(total, 2),
+            'controller_link_capacity_mbps': 1000,
+            'controller_link_util_pct': round(total / 10, 2),
+        },
+        'device_saturation': [],
+        'recent_alerts': _alerts[-10:],
+        'note': 'proactive_congestion service not running — derived from metrics',
+    })
+
+@app.route('/api/structured_alerts')
+def api_structured_alerts():
+    """Return only fully-structured alerts (all 6 fields populated)."""
+    structured = [a for a in _alerts if 'device' in a and 'action_taken' in a]
+    return jsonify({'alerts': structured[-20:], 'count': len(structured)})
 
 @app.route('/api/pingall', methods=['POST'])
 def api_pingall():

@@ -1,11 +1,11 @@
 # Data Mining Report — Tumba College SDN
-Generated: 2026-05-12 00:03:26
+Generated: 2026-05-13 17:32:50
 
 ## Performance KPIs
 | KPI | Value | Target | Pass |
 |-----|-------|--------|------|
 | ML Reaction to Congestion | 45.1 ms | 100 ms | ✅ |
-| Staff LAN Throughput vs Legacy Baseline | -76.3 % | 20 % | ❌ |
+| Staff LAN Throughput vs Legacy Baseline | -80.9 % | 20 % | ❌ |
 | Detected vs Blocked Malicious Flows | 100.0 % | 90 % | ✅ |
 | Staff LAN Latency SLO | 4.0 ms latency | 10 ms latency | ✅ |
 

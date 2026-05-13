@@ -33,6 +33,16 @@ CONGESTION_THRESHOLDS = {
     'throughput_drop_pct': 0.30,   # > 30% drop from 60s baseline
 }
 
+# 4-state proactive threshold model (utilization %)
+THRESHOLD_HEALTHY    = 70.0   # 0-70%   → green  — monitor only
+THRESHOLD_WARNING    = 85.0   # 70-85%  → yellow — predict congestion
+THRESHOLD_PREVENTIVE = 90.0   # 85-90%  → orange — apply control actions
+# > 90%                         → red    — aggressive mitigation
+
+# Access / distribution uplink capacities
+ACCESS_UPLINK_CAPACITY_MBPS = 1000   # access ↔ distribution
+PC_LINK_CAPACITY_MBPS       = 100    # end-device ↔ access switch
+
 # Link capacities (Mbps)
 LINK_CAPACITIES = {
     (1, 2): 1000,  # cs1-ds1
@@ -68,6 +78,9 @@ class TrafficMonitor(app_manager.RyuApp):
         self.zone_metrics = {}     # {zone_name: {throughput, latency, etc.}}
         self.congested_ports = set()
         self.congestion_history = defaultdict(lambda: deque(maxlen=10))
+        # Per-zone history for growth-rate and prediction
+        self.zone_util_history  = {z: deque(maxlen=20) for z in ZONE_DPIDS}
+        self.zone_mbps_history  = {z: deque(maxlen=20) for z in ZONE_DPIDS}
 
         # Throughput baseline for drop detection (60s window)
         self.throughput_baseline = defaultdict(lambda: deque(maxlen=30))
@@ -201,8 +214,53 @@ class TrafficMonitor(app_manager.RyuApp):
             self._log_event('congestion_cleared', dpid=dpid, port=port_no,
                           util_pct=util_pct)
 
+    def _threshold_state(self, util: float) -> str:
+        if util >= THRESHOLD_PREVENTIVE:
+            return 'critical'
+        if util >= THRESHOLD_WARNING:
+            return 'preventive'
+        if util >= THRESHOLD_HEALTHY:
+            return 'warning'
+        return 'healthy'
+
+    def _compute_zone_prediction(self, zone: str, util: float, mbps: float) -> dict:
+        """Compute growth rate and future-load projection for a zone."""
+        hist_u = list(self.zone_util_history.get(zone, []))
+        hist_m = list(self.zone_mbps_history.get(zone, []))
+
+        growth_rate_pct  = 0.0
+        growth_rate_mbps = 0.0
+        if len(hist_u) >= 5:
+            growth_rate_pct  = round((hist_u[-1] - hist_u[-5]) / 5, 3)
+        if len(hist_m) >= 5:
+            growth_rate_mbps = round((hist_m[-1] - hist_m[-5]) / 5, 3)
+
+        # EMA (historical trend component)
+        ema = util
+        if hist_u:
+            alpha = 0.3
+            ema = hist_u[0]
+            for v in hist_u[1:]:
+                ema = alpha * v + (1 - alpha) * ema
+            ema = round(ema, 2)
+
+        # Future Load = Current + Growth Rate * 5 samples + (EMA - Current) * 0.1
+        predicted_util = round(
+            util + growth_rate_pct * 5 + (ema - util) * 0.1, 2
+        )
+        predicted_util = max(0.0, predicted_util)
+
+        return {
+            'growth_rate_pct':   growth_rate_pct,
+            'growth_rate_mbps':  growth_rate_mbps,
+            'historical_ema_pct': ema,
+            'predicted_util_pct': predicted_util,
+            'predicted_threshold_state': self._threshold_state(predicted_util),
+            'congestion_risk': predicted_util > THRESHOLD_WARNING and predicted_util > util,
+        }
+
     def _update_zone_metrics(self):
-        """Calculate per-zone aggregate metrics."""
+        """Calculate per-zone aggregate metrics with 4-state model and prediction."""
         for zone_name, zone_dpid in ZONE_DPIDS.items():
             zone_ports = [
                 (dpid, port) for (dpid, port) in self.port_mbps
@@ -211,11 +269,29 @@ class TrafficMonitor(app_manager.RyuApp):
             total_mbps = sum(self.port_mbps.get(k, 0) for k in zone_ports)
             max_util = max((self.port_util.get(k, 0) for k in zone_ports), default=0)
 
+            # Push to per-zone history
+            self.zone_util_history[zone_name].append(max_util)
+            self.zone_mbps_history[zone_name].append(total_mbps)
+
+            prediction = self._compute_zone_prediction(zone_name, max_util, total_mbps)
+            threshold_state = self._threshold_state(max_util)
+
             self.zone_metrics[zone_name] = {
-                'throughput_mbps': round(total_mbps, 3),
-                'max_utilization_pct': round(max_util, 2),
-                'port_count': len(zone_ports),
-                'congested': any(k in self.congested_ports for k in zone_ports),
+                'throughput_mbps':          round(total_mbps, 3),
+                'max_utilization_pct':      round(max_util, 2),
+                'port_count':               len(zone_ports),
+                'congested':                any(k in self.congested_ports for k in zone_ports),
+                # ── 4-state threshold model ───────────────────────────────
+                'threshold_state':          threshold_state,
+                'uplink_capacity_mbps':     ACCESS_UPLINK_CAPACITY_MBPS,
+                'uplink_util_pct':          round(total_mbps / ACCESS_UPLINK_CAPACITY_MBPS * 100, 2),
+                # ── Prediction / growth rate ──────────────────────────────
+                'growth_rate_pct':          prediction['growth_rate_pct'],
+                'growth_rate_mbps':         prediction['growth_rate_mbps'],
+                'util_ema':                 prediction['historical_ema_pct'],
+                'predicted_util_pct':       prediction['predicted_util_pct'],
+                'predicted_congestion':     prediction['congestion_risk'],
+                'predicted_threshold_state': prediction['predicted_threshold_state'],
             }
 
     def _write_metrics(self):
