@@ -1,0 +1,27 @@
+{
+  "enabled": true,
+  "description": "External VMware endpoints that should be visible to the Ryu/OVS SDN stack.",
+  "zone": {
+    "key": "external_vm",
+    "label": "External VMware",
+    "vlan": 50,
+    "subnet": "10.50.0.",
+    "switch": "ovs_ext",
+    "dpid": 8,
+    "distribution": "ds2",
+    "capacity_mbps": 1000
+  },
+  "vms": [
+    {
+      "id": "ext_win10",
+      "label": "Windows 10 VMware VM",
+      "ip": "10.50.0.10",
+      "mac": "00:50:56:00:00:10",
+      "role": "external_vm",
+      "link_capacity_mbps": 100,
+      "management_ip": "",
+      "ssh_user": "",
+      "ssh_key": ""
+    }
+  ]
+}

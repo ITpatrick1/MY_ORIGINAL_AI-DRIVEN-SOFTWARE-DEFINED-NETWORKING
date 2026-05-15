@@ -13,6 +13,8 @@ eventlet>=0.35
 # ML / Numerical
 numpy>=1.24
 torch>=2.0           # for DQN agent (optional — stub works without it)
+scikit-learn>=1.4    # public/live dataset training pipeline
+joblib>=1.3          # model artifact persistence
 
 # Utilities
 requests>=2.31

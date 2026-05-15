@@ -21,14 +21,31 @@ import time
 from datetime import datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from tumba_sdn.common.campus_core import atomic_write_json, configure_file_logger
+
 
 DB_PATH = os.environ.get('CAMPUS_TIMETABLE_DB', '/tmp/campus_timetable.db')
 STATE_FILE = os.environ.get('CAMPUS_TIMETABLE_STATE', '/tmp/campus_timetable_state.json')
 API_PORT = int(os.environ.get('CAMPUS_TIMETABLE_API_PORT', '9093'))
+LOGGER = configure_file_logger('tumba.timetable', 'timetable.log')
+
+
+def ensure_writable_db(path):
+    """Make the /tmp SQLite database writable across sudo/non-sudo restarts."""
+    parent = os.path.dirname(path) or '.'
+    os.makedirs(parent, exist_ok=True)
+    if os.path.exists(path):
+        try:
+            if os.geteuid() == 0:
+                os.chown(path, os.geteuid(), os.getegid())
+            os.chmod(path, 0o666)
+        except OSError:
+            pass
 
 
 def init_db(path):
     """Initialize the timetable SQLite database with required tables."""
+    ensure_writable_db(path)
     con = sqlite3.connect(path)
 
     con.executescript("""
@@ -130,9 +147,10 @@ def init_db(path):
                 slot,
             )
         con.commit()
-        print(f"Initialized timetable DB with {len(sample_slots)} sample slots")
+        LOGGER.info("initialized timetable db sample_slots=%d", len(sample_slots))
 
     con.close()
+    ensure_writable_db(path)
     return path
 
 
@@ -237,10 +255,7 @@ def compute_state(db_path):
 
 def write_state(state, path):
     """Write timetable state to JSON file."""
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(state, f, indent=2)
-    os.replace(tmp, path)
+    atomic_write_json(path, state, logger=LOGGER, label='timetable_state')
 
 
 class TimetableHandler(BaseHTTPRequestHandler):
@@ -264,42 +279,58 @@ class TimetableHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == '/health':
+            LOGGER.info('api health')
             self._send_json({'ok': True, 'service': 'timetable_engine'})
         elif self.path == '/state':
+            LOGGER.info('api state requested')
             self._send_json(compute_state(self._db_path))
         elif self.path == '/slots':
+            LOGGER.info('api slots requested')
             self._send_json({'slots': get_active_slots(self._db_path)})
         else:
             self._send_json({'error': 'not found'}, 404)
 
     def do_POST(self):
-        body = self._read_body()
-        if self.path == '/override':
-            override_type = body.get('type', 'exam_mode')
-            zone = body.get('zone', '')
-            value = body.get('value', '')
-            duration_s = int(body.get('duration_s', 3600))
-            expires_at = time.time() + duration_s
+        try:
+            body = self._read_body()
+            if self.path == '/override':
+                override_type = body.get('type', 'exam_mode')
+                zone = body.get('zone', '')
+                value = body.get('value', '')
+                duration_s = int(body.get('duration_s', 3600))
+                expires_at = time.time() + duration_s
 
-            con = sqlite3.connect(self._db_path)
-            con.execute(
-                "INSERT INTO overrides (ts, override_type, zone, value, expires_at) "
-                "VALUES (?,?,?,?,?)",
-                (time.time(), override_type, zone, value, expires_at),
-            )
-            con.execute(
-                "INSERT INTO sync_log (ts, source, action, details) VALUES (?,?,?,?)",
-                (time.time(), 'api', 'override_added', json.dumps(body)),
-            )
-            con.commit()
-            con.close()
-            self._send_json({'ok': True, 'msg': f'Override {override_type} added'})
-        elif self.path == '/sync':
-            state = compute_state(self._db_path)
-            write_state(state, STATE_FILE)
-            self._send_json(state)
-        else:
-            self._send_json({'error': 'not found'}, 404)
+                ensure_writable_db(self._db_path)
+                con = sqlite3.connect(self._db_path)
+                try:
+                    con.execute(
+                        "INSERT INTO overrides (ts, override_type, zone, value, expires_at) "
+                        "VALUES (?,?,?,?,?)",
+                        (time.time(), override_type, zone, value, expires_at),
+                    )
+                    con.execute(
+                        "INSERT INTO sync_log (ts, source, action, details) VALUES (?,?,?,?)",
+                        (time.time(), 'api', 'override_added', json.dumps(body)),
+                    )
+                    con.commit()
+                finally:
+                    con.close()
+
+                state = compute_state(self._db_path)
+                write_state(state, STATE_FILE)
+                LOGGER.info('override added type=%s zone=%s duration_s=%s exam_flag=%s',
+                            override_type, zone, duration_s, state.get('exam_flag'))
+                self._send_json({'ok': True, 'msg': f'Override {override_type} added', 'state': state})
+            elif self.path == '/sync':
+                state = compute_state(self._db_path)
+                write_state(state, STATE_FILE)
+                LOGGER.info('api sync period=%s exam_flag=%s', state.get('period'), state.get('exam_flag'))
+                self._send_json(state)
+            else:
+                self._send_json({'error': 'not found'}, 404)
+        except Exception as exc:
+            LOGGER.exception('api post error path=%s err=%s', self.path, exc)
+            self._send_json({'ok': False, 'error': str(exc), 'path': self.path}, 500)
 
     def do_OPTIONS(self):
         self.send_response(204)
@@ -315,8 +346,9 @@ def sync_loop(db_path, state_file, interval=10):
         try:
             state = compute_state(db_path)
             write_state(state, state_file)
+            LOGGER.info('sync loop period=%s exam_flag=%s slots=%d', state.get('period'), state.get('exam_flag'), state.get('slot_count', 0))
         except Exception as e:
-            print(f"Timetable sync error: {e}")
+            LOGGER.error('sync error err=%s', e)
         time.sleep(interval)
 
 
@@ -340,13 +372,12 @@ def main():
 
     # Start HTTP server
     server = ThreadingHTTPServer(('0.0.0.0', args.port), TimetableHandler)
-    print(f"Timetable engine listening on http://0.0.0.0:{args.port}")
-    print(f"  DB: {args.db}")
-    print(f"  State file: {args.state_file}")
+    LOGGER.info('startup host=0.0.0.0 port=%s db=%s state_file=%s', args.port, args.db, args.state_file)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    LOGGER.info('shutdown')
 
 
 if __name__ == '__main__':

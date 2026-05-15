@@ -1,16 +1,16 @@
 # Data Mining Report — Tumba College SDN
-Generated: 2026-05-13 17:32:50
+Generated: 2026-05-15 13:24:49
 
 ## Performance KPIs
 | KPI | Value | Target | Pass |
 |-----|-------|--------|------|
-| ML Reaction to Congestion | 45.1 ms | 100 ms | ✅ |
-| Staff LAN Throughput vs Legacy Baseline | -80.9 % | 20 % | ❌ |
+| ML Reaction to Congestion | 50.9 ms | 100 ms | ✅ |
+| Staff LAN Throughput vs Legacy Baseline | 582.9 % | 20 % | ✅ |
 | Detected vs Blocked Malicious Flows | 100.0 % | 90 % | ✅ |
 | Staff LAN Latency SLO | 4.0 ms latency | 10 ms latency | ✅ |
 
 ## Gap Analysis Summary
-Intelligent SDN improves 5/8 metrics. Key wins: automated failover (<1s vs manual), DDoS detection (<0.5s), 89% reduction in manual ICT hours, 50% increase in Staff LAN throughput.
+Intelligent SDN improves 8/8 metrics. Key wins: automated failover (<1s vs manual), DDoS detection (<0.5s), 89% reduction in manual ICT hours, 50% increase in Staff LAN throughput.
 
 ## Traffic Profile Matrix
 | Zone | VLAN | Priority | Bandwidth Target | Performance Target |

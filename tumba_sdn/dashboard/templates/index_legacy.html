@@ -1,0 +1,2972 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tumba College SDN — Network Operations Center</title>
+<meta name="description" content="AI-Driven SDN monitoring dashboard for Tumba College of Technology">
+<script src="/static/js/socket.io.min.js"></script>
+<script src="/static/js/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0e1a;--surface:#111827;--surface2:#1a2035;--surface3:#1f2a44;--border:#2a3555;--txt:#e2e8f0;--dim:#64748b;--accent:#3b82f6;--green:#10d9a0;--red:#ef4444;--amber:#f59e0b;--purple:#a855f7;--cyan:#06b6d4;--r:12px}
+body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh}
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;background:linear-gradient(180deg,#0f1629,#111827);border-right:1px solid var(--border);padding:20px 12px;flex-shrink:0;position:fixed;height:100vh;overflow-y:auto;z-index:10}
+.brand{padding:8px 0 20px;border-bottom:1px solid var(--border);margin-bottom:16px}
+.brand h1{font-size:14px;font-weight:800;color:var(--accent);letter-spacing:1px}
+.brand p{font-size:11px;color:var(--dim);margin-top:2px}
+.nav-label{font-size:10px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1.5px;padding:12px 8px 6px}
+.nav-btn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border:none;background:transparent;color:var(--dim);font-size:13px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .15s}
+.nav-btn:hover{background:var(--surface2);color:var(--txt)}
+.nav-btn.active{background:rgba(59,130,246,.12);color:var(--accent);font-weight:600}
+.nav-icon{font-size:16px;width:20px;text-align:center}
+.main{margin-left:220px;flex:1;min-height:100vh}
+.topbar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;padding:12px 24px;background:rgba(10,14,26,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);flex-wrap:wrap}
+.topbar h2{font-size:16px;font-weight:700;flex:1}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11px;font-weight:600;border:1px solid}
+.badge.ok{color:var(--green);border-color:rgba(16,217,160,.3);background:rgba(16,217,160,.08)}
+.badge.warn{color:var(--amber);border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.08)}
+.badge.err{color:var(--red);border-color:rgba(239,68,68,.3);background:rgba(239,68,68,.08)}
+.dot{width:6px;height:6px;border-radius:50%;background:currentColor;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.content{padding:24px;min-width:0}
+.page{display:none;min-width:0}.page.active{display:block}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:20px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px;position:relative;overflow:hidden;min-width:0}
+.kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.kpi.g::before{background:linear-gradient(90deg,var(--green),var(--cyan))}
+.kpi.b::before{background:linear-gradient(90deg,var(--accent),var(--purple))}
+.kpi.a::before{background:linear-gradient(90deg,var(--amber),#f97316)}
+.kpi.r::before{background:linear-gradient(90deg,var(--red),#f43f5e)}
+.kpi-label{font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:.5px}
+.kpi-value{font-size:28px;font-weight:800;margin:4px 0}
+.kpi-sub{font-size:11px;color:var(--dim)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px}
+.split-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.split-2-tight{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.split-3-2{display:grid;grid-template-columns:minmax(0,3fr) minmax(0,2fr);gap:14px;margin-bottom:14px}
+.split-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.split-4-tight{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.stack-col{display:flex;flex-direction:column;gap:14px;min-width:0}
+.tight-grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;min-width:0}
+.card-head{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border)}
+.card-title{font-size:13px;font-weight:700}
+.card-body{padding:14px 16px;min-width:0}
+.stat{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,53,85,.4);font-size:12px}
+.stat:last-child{border:none}
+.stat-k{color:var(--dim)}.stat-v{font-weight:600}
+.stat-v.g{color:var(--green)}.stat-v.r{color:var(--red)}.stat-v.a{color:var(--amber)}.stat-v.b{color:var(--accent)}
+pre.log{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-size:11px;color:var(--dim);max-height:300px;overflow:auto;white-space:pre-wrap;word-break:break-all;line-height:1.6}
+.topo-svg{width:100%;height:680px;background:radial-gradient(ellipse at center,#0d1225,var(--bg))}
+/* ─── PC Browser Modal ─── */
+.pcb-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)}
+.pcb-window{width:560px;max-width:95vw;background:#1a1f2e;border:1px solid var(--border);border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.8);overflow:hidden;animation:pcbIn .2s ease}
+@keyframes pcbIn{from{transform:scale(.92);opacity:0}to{transform:scale(1);opacity:1}}
+.pcb-titlebar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:#141824;border-bottom:1px solid var(--border)}
+.pcb-dots{display:flex;gap:6px}.pcb-dot{width:12px;height:12px;border-radius:50%}
+.pcb-dot.r{background:#ef4444}.pcb-dot.y{background:#f59e0b}.pcb-dot.g{background:#10d9a0}
+.pcb-wintitle{flex:1;text-align:center;font-size:12px;font-weight:600;color:var(--dim)}
+.pcb-close{background:none;border:none;color:var(--dim);cursor:pointer;font-size:16px;padding:0 4px;line-height:1}
+.pcb-close:hover{color:var(--txt)}
+.pcb-urlbar{display:flex;align-items:center;gap:8px;padding:8px 14px;background:#111827;border-bottom:1px solid var(--border)}
+.pcb-navbtns{color:var(--dim);font-size:14px;display:flex;gap:6px}
+.pcb-url{flex:1;background:#0a0e1a;border:1px solid var(--border);border-radius:6px;padding:4px 10px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pcb-body{padding:16px}
+.pcb-body h4{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+.pcb-apps{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px}
+.pcb-app{background:var(--surface2);border:2px solid var(--border);border-radius:10px;padding:10px 6px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.pcb-app:hover{border-color:var(--accent);background:rgba(59,130,246,.08);transform:translateY(-1px)}
+.pcb-app.active-app{border-color:currentColor;background:rgba(var(--app-rgb),.12)}
+.pcb-app-icon{font-size:22px;margin-bottom:4px}
+.pcb-app-name{font-size:11px;font-weight:600;color:var(--txt)}
+.pcb-app-sub{font-size:9px;color:var(--dim);margin-top:2px}
+.pcb-app-bw{font-size:9px;margin-top:3px;font-weight:600}
+.pcb-statusbar{display:flex;gap:12px;align-items:center;padding:8px 14px;background:#111827;border-top:1px solid var(--border);font-size:11px}
+.pcb-statusbar span{display:flex;align-items:center;gap:4px}
+.pcb-bwbar{flex:1;height:4px;background:var(--surface3);border-radius:2px;overflow:hidden}
+.pcb-bwfill{height:100%;border-radius:2px;transition:width .4s}
+@keyframes flowDot{0%{offset-distance:0%}100%{offset-distance:100%}}
+@keyframes hostPulse{0%,100%{opacity:.7}50%{opacity:1}}
+.btn{padding:6px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface2);color:var(--txt);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn:hover{background:var(--surface3)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.primary:hover{background:#2563eb}.btn.danger{background:var(--red);border-color:var(--red);color:#fff}
+.scenario-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px;margin-bottom:12px}
+.scenario-btn{padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--txt);font-size:12px;font-weight:500;cursor:pointer;transition:all .15s;text-align:left}
+.scenario-btn:hover{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.scenario-btn.sel{border-color:var(--accent);background:rgba(59,130,246,.12);color:var(--accent)}
+.ibn-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:10px}
+.ibn-btn{padding:9px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--txt);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:left;width:100%}
+.ibn-btn:hover{border-color:#10d9a0;background:rgba(16,217,160,.08);color:#10d9a0}
+.ibn-btn.fired{border-color:#10d9a0;background:rgba(16,217,160,.12);color:#10d9a0}
+.run-all-btn{padding:9px 18px;border-radius:10px;border:2px solid var(--accent);background:linear-gradient(135deg,rgba(59,130,246,.15),rgba(16,217,160,.1));color:var(--txt);font-size:13px;font-weight:700;cursor:pointer;transition:all .2s;letter-spacing:.3px}
+.run-all-btn:hover{background:linear-gradient(135deg,rgba(59,130,246,.3),rgba(16,217,160,.2));transform:translateY(-1px);box-shadow:0 4px 16px rgba(59,130,246,.3)}
+.bar-wrap{margin:6px 0}.bar-label{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-bottom:3px}
+.bar{height:6px;background:var(--surface3);border-radius:3px;overflow:hidden}
+.bar-fill{height:100%;border-radius:3px;transition:width .4s}
+.zone-table{width:100%;border-collapse:collapse;font-size:12px}
+.zone-table th{text-align:left;padding:8px;color:var(--dim);font-weight:600;border-bottom:1px solid var(--border);font-size:11px}
+.zone-table td{padding:8px;border-bottom:1px solid rgba(42,53,85,.3)}
+.traffic-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+.traffic-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px}
+.traffic-card h4{font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px}
+.traffic-card .tval{font-size:18px;font-weight:800;margin-bottom:2px}
+.traffic-card .tsub{font-size:10px;color:var(--dim)}
+.host-list{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.host-chip{font-size:9px;padding:2px 6px;border-radius:10px;border:1px solid var(--border);color:var(--dim);background:var(--surface3)}
+@media(max-width:1320px){.split-4,.split-4-tight{grid-template-columns:repeat(2,minmax(0,1fr))}.split-3-2{grid-template-columns:1fr}.pcong-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:1100px){.grid2,.grid3,.split-2,.split-3-2,.pcsim-layout{grid-template-columns:1fr}.traffic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.content{padding:18px}.topbar{padding:12px 18px}.topo-svg{height:640px}}
+@media(max-width:900px){.sidebar{display:none}.main{margin-left:0}.grid2,.grid3,.split-2,.split-2-tight,.split-3-2,.split-4,.split-4-tight,.scenario-quick,.alert-fields,.pcong-metrics,.tight-grid-2{grid-template-columns:1fr}.traffic-grid,.pcb-apps{grid-template-columns:1fr 1fr}.content{padding:16px}.topbar{gap:8px}.topo-svg{height:600px}}
+@media(max-width:640px){.traffic-grid,.pcb-apps{grid-template-columns:1fr}.ibn-grid,.scenario-grid,.pc-grid{grid-template-columns:1fr}.topo-svg{height:560px}}
+
+/* ─── PC Simulator styles ─── */
+.pcsim-layout{display:grid;grid-template-columns:1fr 340px;gap:14px;align-items:start}
+.pc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.pc-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.pc-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,#64748b)}
+.pc-card:hover{border-color:var(--accent);background:var(--surface2)}
+.pc-card.selected{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.pc-card.active-traffic{box-shadow:0 0 12px rgba(59,130,246,.25)}
+.pc-icon{font-size:22px;margin-bottom:6px;display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;background:var(--surface3);font-family:monospace;font-weight:800;color:var(--c,#64748b)}
+.pc-name{font-size:12px;font-weight:700;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-ip{font-size:10px;color:var(--dim);margin-bottom:6px}
+.pc-activity-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:rgba(100,116,139,.15);color:var(--c,#64748b);margin-bottom:4px;display:inline-block;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pc-traffic-bar{height:3px;background:var(--surface3);border-radius:2px;margin-top:4px;overflow:hidden}
+.pc-traffic-fill{height:100%;background:var(--c,#64748b);border-radius:2px;transition:width .6s}
+.pc-bw{font-size:9px;color:var(--dim);margin-top:2px}
+.pc-priority{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--c,#64748b)}
+
+/* Config panel */
+.config-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);position:sticky;top:70px}
+.config-panel .card-head{border-bottom:1px solid var(--border);padding:12px 16px}
+.act-btn{width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--border);background:var(--surface2);color:var(--txt);font-size:12px;font-weight:500;border-radius:8px;cursor:pointer;transition:all .15s;margin-bottom:6px;text-align:left}
+.act-btn:hover{border-color:var(--accent);background:rgba(59,130,246,.08)}
+.act-btn.active{border-color:var(--c,#64748b);background:rgba(100,116,139,.1);color:var(--c,#64748b);font-weight:700}
+.act-icon{width:24px;height:24px;border-radius:6px;background:rgba(100,116,139,.2);display:flex;align-items:center;justify-content:center;font-family:monospace;font-weight:900;font-size:12px;color:var(--c,#64748b);flex-shrink:0}
+.act-meta{display:flex;flex-direction:column;flex:1}
+.act-label{font-size:12px;font-weight:600}
+.act-desc{font-size:10px;color:var(--dim);margin-top:1px}
+.priority-badge{font-size:9px;font-weight:800;padding:1px 6px;border-radius:8px;background:rgba(100,116,139,.15);color:var(--c,#64748b);margin-left:auto;flex-shrink:0;align-self:flex-start}
+
+/* Scenario quick-set */
+.scenario-quick{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px}
+.sq-btn{padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--dim);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;text-align:center}
+.sq-btn:hover{border-color:var(--accent);color:var(--txt)}
+
+/* Baseline comparison bar */
+.baseline-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid rgba(42,53,85,.4);font-size:11px}
+.baseline-row:last-child{border:none}
+.bl-label{flex:1;color:var(--dim)}
+.bl-before{color:var(--amber);font-weight:600;min-width:60px;text-align:right}
+.bl-after{color:var(--green);font-weight:600;min-width:60px;text-align:right}
+.bl-delta{color:var(--accent);font-weight:700;min-width:50px;text-align:right}
+/* Alert dropdown */
+.alert-item{padding:8px 10px;border-radius:8px;margin-bottom:6px;border:1px solid var(--border);font-size:12px}
+.alert-item.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
+.alert-item.preventive{border-color:rgba(249,115,22,.4);background:rgba(249,115,22,.06)}
+.alert-item.warning{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.alert-item.healthy{border-color:rgba(16,217,160,.3);background:rgba(16,217,160,.04)}
+.alert-title{font-weight:700;margin-bottom:2px}
+.alert-detail{color:var(--dim);font-size:11px}
+.alert-ts{font-size:10px;color:var(--dim);margin-top:3px}
+.alert-fields{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;margin-top:4px;font-size:10px;color:var(--dim)}
+.alert-field-key{font-weight:600;color:#64748b}
+/* Proactive Congestion panel */
+.pcong-zone{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px}
+.pcong-zone-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.pcong-state-badge{font-size:10px;font-weight:800;padding:2px 10px;border-radius:10px;text-transform:uppercase;letter-spacing:.5px}
+.pcong-state-badge.healthy{background:rgba(16,217,160,.15);color:#10d9a0;border:1px solid rgba(16,217,160,.3)}
+.pcong-state-badge.warning{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.pcong-state-badge.preventive{background:rgba(249,115,22,.15);color:#f97316;border:1px solid rgba(249,115,22,.3)}
+.pcong-state-badge.critical{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.pcong-bar{height:8px;background:var(--surface3);border-radius:4px;overflow:hidden;margin:4px 0}
+.pcong-bar-fill{height:100%;border-radius:4px;transition:width .5s}
+.pcong-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:10px;color:var(--dim);margin-top:4px}
+.pcong-metric-val{font-weight:700;color:var(--txt);font-size:11px}
+.saturation-item{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:8px;margin-bottom:6px;background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.3);font-size:12px}
+.saturation-item.warning{background:rgba(245,158,11,.06);border-color:rgba(245,158,11,.3)}
+/* Threat badge */
+.threat-badge{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:8px;margin-bottom:8px;border:1px solid}
+.threat-badge.critical{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.06)}
+.threat-badge.warning{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.06)}
+.threat-badge.ok{border-color:rgba(16,217,160,.3);background:rgba(16,217,160,.06)}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav class="sidebar">
+<div class="brand"><h1>SDN NOC</h1><p>Tumba College • Operations Center</p></div>
+<div class="nav-label">Monitoring</div>
+<button class="nav-btn active" data-page="overview"><span class="nav-icon">⬡</span>Overview</button>
+<button class="nav-btn" data-page="topology"><span class="nav-icon">◈</span>Topology</button>
+<button class="nav-btn" data-page="analytics"><span class="nav-icon">▲</span>Analytics</button>
+<div class="nav-label">Operations</div>
+<button class="nav-btn" data-page="control"><span class="nav-icon">⚡</span>Control Center</button>
+<button class="nav-btn" data-page="security"><span class="nav-icon">⛨</span>Security</button>
+<button class="nav-btn" data-page="pcsim"><span class="nav-icon">◉</span>PC Simulator</button>
+<div class="nav-label">AI & Intelligence</div>
+<button class="nav-btn" data-page="intelligence"><span class="nav-icon">◎</span>Intelligence</button>
+<button class="nav-btn" data-page="proactive"><span class="nav-icon">⚠</span>Proactive Cong.</button>
+<button class="nav-btn" data-page="ibn"><span class="nav-icon">✦</span>IBN Control</button>
+<div class="nav-label">Diagnostics</div>
+<button class="nav-btn" data-page="logs"><span class="nav-icon">≡</span>Logs & Events</button>
+<div style="margin-top:auto;padding:16px 8px;font-size:10px;color:var(--dim)"><span class="dot" style="display:inline-block;margin-right:6px"></span>Auto-refresh 2s</div>
+</nav>
+
+<div class="main">
+<header class="topbar">
+<h2 id="pageTitle">Overview</h2>
+<div class="badge ok" id="ctrlBadge"><span class="dot"></span>Controller</div>
+<div style="position:relative">
+  <button class="btn" id="btnAlerts" style="position:relative">🔔 Alerts <span id="alertBadge" style="display:none;position:absolute;top:-4px;right:-4px;background:var(--red);color:#fff;font-size:9px;font-weight:800;padding:1px 5px;border-radius:10px">0</span></button>
+  <div id="alertDropdown" style="display:none;position:absolute;right:0;top:38px;width:340px;background:var(--surface);border:1px solid var(--border);border-radius:10px;z-index:100;box-shadow:0 8px 32px rgba(0,0,0,.6);max-height:380px;overflow-y:auto">
+    <div style="padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;font-weight:700;display:flex;justify-content:space-between"><span>Recent Alerts</span><button onclick="$('#alertDropdown').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px">✕</button></div>
+    <div id="alertList" style="padding:8px"></div>
+  </div>
+</div>
+<button class="btn" id="btnPingall">Ping All</button>
+<button class="btn primary" id="btnRefresh">↺ Refresh</button>
+<button class="run-all-btn" id="btnRunAll" title="Trigger all system operations simultaneously">⚡ Run All Demo</button>
+</header>
+<!-- Run All Demo Modal -->
+<div id="runAllModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:200;align-items:center;justify-content:center;backdrop-filter:blur(6px)">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:540px;max-width:95vw;box-shadow:0 24px 64px rgba(0,0,0,.8)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:16px;font-weight:700">⚡ Run All Demo</span>
+      <button onclick="document.getElementById('runAllModal').style.display='none'" style="background:none;border:none;color:var(--dim);cursor:pointer;font-size:18px">✕</button>
+    </div>
+    <div style="font-size:12px;color:var(--dim);margin-bottom:14px">Select a demo mode to trigger all system components simultaneously and watch the AI react in real-time.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+      <button class="ibn-btn" onclick="runAllDemo('full')" style="padding:14px;font-size:13px">🌐 Full Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">All scenarios + IBN intents</span></button>
+      <button class="ibn-btn" onclick="runAllDemo('security')" style="padding:14px;font-size:13px">🛡 Security Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">DDoS + Port Scan detection</span></button>
+      <button class="ibn-btn" onclick="runAllDemo('traffic')" style="padding:14px;font-size:13px">📈 Traffic Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">Scalability + Congestion</span></button>
+      <button class="ibn-btn" onclick="runAllDemo('qos')" style="padding:14px;font-size:13px">🎓 QoS Demo<br><span style="font-size:10px;color:var(--dim);font-weight:400">Exam mode + Load Balance</span></button>
+    </div>
+    <pre id="runAllLog" class="log" style="max-height:200px">Select a demo mode above...</pre>
+  </div>
+</div>
+
+<div class="content">
+<!-- OVERVIEW -->
+<div class="page active" id="pg-overview">
+<div class="kpi-row">
+<div class="kpi g" id="kpiCtrl"><div class="kpi-label">Controller</div><div class="kpi-value" id="kvCtrl">—</div><div class="kpi-sub" id="ksCtrl">Checking...</div></div>
+<div class="kpi b" id="kpiTput"><div class="kpi-label">Total Throughput</div><div class="kpi-value" id="kvTput">—</div><div class="kpi-sub" id="ksTput">Mbps across zones</div></div>
+<div class="kpi a" id="kpiPolicy"><div class="kpi-label">AI Action</div><div class="kpi-value" id="kvPolicy">—</div><div class="kpi-sub" id="ksPolicy">DQN agent state</div></div>
+<div class="kpi g" id="kpiSec"><div class="kpi-label">Security</div><div class="kpi-value" id="kvSec">—</div><div class="kpi-sub" id="ksSec">Zero-Trust status</div></div>
+</div>
+<div class="grid3">
+<div class="card"><div class="card-head"><span class="card-title">Zone Metrics</span><span style="font-size:10px;color:var(--dim)">+ latency/loss estimated from utilization</span></div><div class="card-body"><table class="zone-table"><thead><tr><th>Zone</th><th>Throughput</th><th>Util %</th><th>Latency</th><th>Loss</th><th>Status</th></tr></thead><tbody id="zoneTable"></tbody></table></div></div>
+<div class="card"><div class="card-head"><span class="card-title">AI Routing Decision</span><span style="font-size:10px;color:var(--dim)">DQN reward breakdown</span></div><div class="card-body"><pre class="log" id="aiPane">Loading AI state...</pre></div></div>
+<div class="card"><div class="card-head"><span class="card-title">Alerts &amp; Events</span></div><div class="card-body"><pre class="log" id="alertPane">No active alerts.</pre></div></div>
+</div>
+<div class="grid2">
+<div class="card"><div class="card-head"><span class="card-title">Link Utilization</span></div><div class="card-body" id="linkBars">No data</div></div>
+<div class="card"><div class="card-head"><span class="card-title">Timetable State</span></div><div class="card-body"><pre class="log" id="ttPane">Loading timetable...</pre></div></div>
+</div>
+<!-- Live Flows -->
+<div class="card" style="margin-top:14px">
+  <div class="card-head"><span class="card-title">Live Flows — Top Active Connections</span><span style="font-size:11px;color:var(--dim)" id="flowCount">0 active</span></div>
+  <div class="card-body" style="overflow-x:auto">
+    <table class="zone-table" style="min-width:1260px">
+      <thead><tr><th>Source PC</th><th>Source IP</th><th>VLAN / Switch</th><th>Destination</th><th>Service</th><th>Proto</th><th>Activity</th><th>Bandwidth</th><th>Priority</th><th>DSCP</th><th>Controller Action</th><th>Status</th><th>Security</th></tr></thead>
+      <tbody id="flowTbody"><tr><td colspan="13" style="color:var(--dim)">Loading flows...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Problem Statement Coverage Panel -->
+<div class="card" style="margin-top:14px" id="problemCoverageCard">
+  <div class="card-head" style="cursor:pointer" onclick="toggleProblemPanel()">
+    <span class="card-title">Problem Statement Coverage</span>
+    <span style="font-size:11px;color:var(--dim)">10 identified problems — click to expand/collapse</span>
+    <span id="pCovBadge" style="margin-left:auto;background:var(--green);color:#000;font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px">10 / 10</span>
+  </div>
+  <div class="card-body" id="problemCoverageBody" style="display:none">
+    <div id="problemGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:4px"></div>
+    <div style="margin-top:10px;font-size:10px;color:var(--dim);text-align:right" id="pCovTs">Last updated: —</div>
+  </div>
+</div>
+</div>
+
+<!-- TOPOLOGY -->
+<!-- PC Browser Modal -->
+<div class="pcb-overlay" id="pcbModal" style="display:none" onclick="if(event.target===this)closePcBrowser()">
+  <div class="pcb-window">
+    <div class="pcb-titlebar">
+      <div class="pcb-dots"><span class="pcb-dot r"></span><span class="pcb-dot y"></span><span class="pcb-dot g"></span></div>
+      <div class="pcb-wintitle" id="pcbTitle">PC Name</div>
+      <button class="pcb-close" onclick="closePcBrowser()">✕</button>
+    </div>
+    <div class="pcb-urlbar">
+      <div class="pcb-navbtns"><span>←</span><span>→</span><span>↻</span></div>
+      <input class="pcb-url" id="pcbUrlInput" value="https://campus.tumba.edu" style="background:transparent;border:none;color:var(--txt);width:100%" />
+      <button class="btn primary" style="padding:4px 10px;font-size:11px" onclick="openBrowserUrl()">Open</button>
+      <span style="font-size:14px">🔍</span>
+    </div>
+    <div class="pcb-body">
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:12px" id="pcbDetails">
+        <div style="font-size:11px;color:var(--dim)">Loading PC details…</div>
+      </div>
+      <h4>Open an Application</h4>
+      <div class="pcb-apps" id="pcbApps"><!-- filled by JS --></div>
+      <h4 style="margin-top:14px">Terminal / Security Tools</h4>
+      <div style="display:flex;flex-wrap:wrap;gap:8px" id="pcbTools">
+        <button class="btn" onclick="runPcTool('ping sweep')">Ping Sweep</button>
+        <button class="btn" onclick="runPcTool('port scan')">Port Scan</button>
+        <button class="btn" onclick="runPcTool('flood')">Flood</button>
+        <button class="btn" onclick="runPcTool('brute-force simulation')">Brute Force</button>
+        <button class="btn" onclick="runPcTool('unauthorized server access')">Unauthorized Access</button>
+        <button class="btn" onclick="runPcTool('ip spoofing simulation')">IP Spoof</button>
+        <button class="btn" onclick="runPcTool('arp spoofing simulation')">ARP Spoof</button>
+        <button class="btn danger" onclick="runPcTool('stop attack')">Stop Attack</button>
+      </div>
+    </div>
+    <div class="pcb-statusbar">
+      <span style="color:var(--dim)">Activity:</span>
+      <span id="pcbCurAct" style="font-weight:700">Idle</span>
+      <span class="pcb-bwbar"><span class="pcb-bwfill" id="pcbBwFill" style="width:0%;background:#10d9a0"></span></span>
+      <span id="pcbBwVal" style="font-weight:600;min-width:60px;text-align:right">0.0 Mbps</span>
+      <span id="pcbPriLabel" style="color:var(--dim)">Best-Effort</span>
+      <span id="pcbBrowserStatus" style="color:var(--dim)">Idle</span>
+    </div>
+  </div>
+</div>
+
+<div class="page" id="pg-topology">
+<div class="card"><div class="card-head"><span class="card-title">Live Network Topology — Click any PC to interact</span><span style="font-size:11px;color:var(--dim)" id="topoInfo">20 PCs • 4 servers • 7 switches</span></div>
+<div class="card-body"><svg class="topo-svg" id="topoSvg" viewBox="0 0 1100 680">
+<defs>
+  <marker id="arrowG" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#10d9a0" opacity="0.6"/></marker>
+  <marker id="arrowA" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#f59e0b" opacity="0.6"/></marker>
+  <marker id="arrowR" markerWidth="6" markerHeight="4" refX="6" refY="2" orient="auto"><path d="M0,0 L6,2 L0,4" fill="#ef4444" opacity="0.6"/></marker>
+  <filter id="glow"><feGaussianBlur stdDeviation="3" result="g"/><feMerge><feMergeNode in="g"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+</svg>
+<div style="display:flex;gap:14px;margin-top:8px;font-size:11px;color:var(--dim);flex-wrap:wrap;align-items:center">
+<span>◆ <b style="color:#3b82f6">Core Switch</b></span>
+<span>◆ <b style="color:#a855f7">Distribution</b></span>
+<span>◆ <b style="color:#10d9a0">Access Switch</b></span>
+<span>■ <b style="color:#06b6d4">Server</b></span>
+<span>● <b style="color:#94a3b8">End Device</b></span>
+<span style="margin-left:8px;border-left:1px solid var(--border);padding-left:8px">Link Utilization:</span>
+<span>━ <b style="color:#10d9a0">0–70% Normal</b></span>
+<span>━ <b style="color:#eab308">70–85% Warning</b></span>
+<span>━ <b style="color:#f97316">85–90% Preventive</b></span>
+<span>━ <b style="color:#ef4444">90–100% Critical</b></span>
+<span>● <b style="color:#22d3ee">Traffic flow</b></span>
+</div></div></div>
+<!-- Traffic stats per zone -->
+<div class="traffic-grid" id="trafficZoneCards">
+  <div class="traffic-card" id="tcStaff"><h4>🏢 Staff LAN (VLAN 10)</h4><div class="tval" style="color:var(--green)" id="tcStaffVal">0 Mbps</div><div class="tsub" id="tcStaffSub">3 PCs — Access Switch</div><div class="host-list" id="tcStaffHosts"></div></div>
+  <div class="traffic-card" id="tcServer"><h4>🖥 Server Zone (VLAN 20)</h4><div class="tval" style="color:var(--cyan)" id="tcServerVal">0 Mbps</div><div class="tsub" id="tcServerSub">4 servers — Access Switch</div><div class="host-list" id="tcServerHosts"></div></div>
+  <div class="traffic-card" id="tcLab"><h4>🔬 IT Lab (VLAN 30)</h4><div class="tval" style="color:var(--purple)" id="tcLabVal">0 Mbps</div><div class="tsub" id="tcLabSub">3 PCs — Access Switch</div><div class="host-list" id="tcLabHosts"></div></div>
+  <div class="traffic-card" id="tcWifi"><h4>📶 Student WiFi (VLAN 40)</h4><div class="tval" style="color:var(--amber)" id="tcWifiVal">0 Mbps</div><div class="tsub" id="tcWifiSub">4 devices — Access Switch</div><div class="host-list" id="tcWifiHosts"></div></div>
+  <div class="traffic-card" id="tcExternal"><h4>🪟 External VMware (VLAN 50)</h4><div class="tval" style="color:var(--cyan)" id="tcExternalVal">0 Mbps</div><div class="tsub" id="tcExternalSub">Windows VM — OVS bridge</div><div class="host-list" id="tcExternalHosts"></div></div>
+</div>
+</div>
+
+<!-- ANALYTICS -->
+<div class="page" id="pg-analytics">
+<div class="kpi-row">
+<div class="kpi b"><div class="kpi-label">Total Throughput</div><div class="kpi-value" id="anTput">—</div><div class="kpi-sub">Mbps all zones</div></div>
+<div class="kpi g"><div class="kpi-label">Latency Est.</div><div class="kpi-value" id="anLat">—</div><div class="kpi-sub">ms average</div></div>
+<div class="kpi a"><div class="kpi-label">Congested Zones</div><div class="kpi-value" id="anCong">—</div><div class="kpi-sub">active congestion</div></div>
+<div class="kpi g"><div class="kpi-label">Flow Rules</div><div class="kpi-value" id="anFlows">—</div><div class="kpi-sub">installed</div></div>
+</div>
+<!-- Throughput chart -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Live Throughput — Per Zone (last 5 min)</span><span style="font-size:11px;color:var(--dim)" id="anSamples">0 samples</span></div>
+  <div class="card-body" style="padding:10px"><canvas id="chartThroughput" height="90"></canvas></div>
+</div>
+<div class="grid2">
+<!-- Utilisation chart -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Zone Utilisation % (EMA trend)</span></div>
+  <div class="card-body" style="padding:10px"><canvas id="chartUtil" height="120"></canvas></div>
+</div>
+<!-- AI Q-values chart -->
+<div class="card">
+  <div class="card-head"><span class="card-title">DQN Agent — Q-Values & Reward</span></div>
+  <div class="card-body" style="padding:10px"><canvas id="chartDqn" height="120"></canvas></div>
+</div>
+</div>
+<div class="grid2" style="margin-top:14px">
+<div class="card"><div class="card-head"><span class="card-title">Per-Zone Performance</span></div><div class="card-body"><pre class="log" id="anZone">Loading...</pre></div></div>
+<div class="card"><div class="card-head"><span class="card-title">DQN Agent Analysis</span></div><div class="card-body"><pre class="log" id="anDqn">Loading...</pre></div></div>
+</div>
+</div>
+
+<!-- CONTROL -->
+<div class="page" id="pg-control">
+<!-- Autonomous traffic engine controls -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">🤖 Autonomous Traffic Engine</span><span style="font-size:11px;color:var(--dim)" id="autoStatus">Checking...</span></div>
+  <div class="card-body">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button class="btn primary" id="btnAutoResume">▶ Resume Auto</button>
+      <button class="btn" id="btnAutoPause">⏸ Pause Auto</button>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Inject Demo Scenario (auto-reverts after timeout)</div>
+    <div class="scenario-grid" id="scenarioGrid">
+      <button class="scenario-btn" data-sc="normal_traffic">✅ Normal Traffic</button>
+      <button class="scenario-btn" data-sc="warning_wifi">🟡 WiFi Warning</button>
+      <button class="scenario-btn" data-sc="preventive_wifi">🟠 WiFi Preventive</button>
+      <button class="scenario-btn" data-sc="critical_port">🔴 Port Saturation</button>
+      <button class="scenario-btn" data-sc="elearning_priority">🎓 E-learning Priority</button>
+      <button class="scenario-btn" data-sc="streaming_throttle">📺 Streaming Control</button>
+      <button class="scenario-btn" data-sc="exam_mode">📝 Exam Mode</button>
+      <button class="scenario-btn" data-sc="port_scan_attack">🔍 Port Scan Attack</button>
+      <button class="scenario-btn" data-sc="ddos_attack">⚡ DDoS / Flood</button>
+      <button class="scenario-btn" data-sc="unauthorized_access">🚫 Unauthorized Access</button>
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn primary" id="btnStartSc">▶ Inject</button><button class="btn danger" id="btnStopSc">■ Stop All</button></div>
+    <pre class="log" id="scLog" style="margin-top:12px">Select a scenario and click Inject.</pre>
+  </div>
+</div>
+<!-- QoS status -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Network Policy Status</span></div>
+  <div class="card-body">
+    <div class="stat"><span class="stat-k">Exam Mode</span><span class="stat-v" id="ctrlExamMode">—</span></div>
+    <div class="stat"><span class="stat-k">Social Throttle</span><span class="stat-v" id="ctrlThrottle">—</span></div>
+    <div class="stat"><span class="stat-k">Congestion Predicted</span><span class="stat-v" id="ctrlPredicted">—</span></div>
+    <div class="stat"><span class="stat-k">Last DQN Action</span><span class="stat-v b" id="ctrlLastAction">—</span></div>
+    <div class="stat"><span class="stat-k">Timetable Period</span><span class="stat-v" id="ctrlPeriod">—</span></div>
+  </div>
+</div>
+</div>
+
+<!-- SECURITY -->
+<div class="page" id="pg-security">
+<div class="kpi-row">
+<div class="kpi g"><div class="kpi-label">Security Status</div><div class="kpi-value" id="secStatus">—</div><div class="kpi-sub" id="secSub">Zero-Trust active</div></div>
+<div class="kpi r"><div class="kpi-label">Blocked Flows</div><div class="kpi-value" id="secBlocked">—</div><div class="kpi-sub" id="secBlockedIPs">0 IPs blocked</div></div>
+<div class="kpi a"><div class="kpi-label">DDoS / Scan</div><div class="kpi-value" id="secDdos">—</div><div class="kpi-sub" id="secDdosSub">monitoring</div></div>
+<div class="kpi b"><div class="kpi-label">Active Threats</div><div class="kpi-value" id="secCongPred">—</div><div class="kpi-sub" id="secThreatSub">scan/ddos/arp</div></div>
+</div>
+<div class="grid2">
+<div class="card">
+  <div class="card-head"><span class="card-title">Active Threats</span></div>
+  <div class="card-body" id="secThreats">
+    <div style="color:var(--dim);font-size:12px">Monitoring...</div>
+  </div>
+</div>
+<div class="card">
+  <div class="card-head"><span class="card-title">Zero-Trust Policy</span></div>
+  <div class="card-body">
+    <div class="stat"><span class="stat-k">Student WiFi → Staff LAN</span><span class="stat-v r">BLOCKED</span></div>
+    <div class="stat"><span class="stat-k">Staff → Server Zone (80,443)</span><span class="stat-v g">ALLOWED</span></div>
+    <div class="stat"><span class="stat-k">Lab → Server Zone (80,443,22)</span><span class="stat-v g">ALLOWED</span></div>
+    <div class="stat"><span class="stat-k">WiFi → Server Zone (80,443)</span><span class="stat-v g">ALLOWED</span></div>
+    <div class="stat"><span class="stat-k">ARP Spoofing Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">MAC Flood Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Port Scan Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Network Sweep Detection</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">DDoS Auto-block</span><span class="stat-v g">ACTIVE</span></div>
+    <div class="stat"><span class="stat-k">Blocked Attacker IPs</span><span class="stat-v r" id="secBlockedIPCount">0</span></div>
+    <div class="stat"><span class="stat-k">Exam Mode</span><span class="stat-v b" id="secExamMode">OFF</span></div>
+  </div>
+</div>
+</div>
+<div class="card" style="margin-top:14px"><div class="card-head"><span class="card-title">Security Event Log</span></div><div class="card-body"><pre class="log" id="secLog">Loading security events...</pre></div></div>
+</div>
+
+<!-- LOGS -->
+<div class="page" id="pg-logs">
+<div class="card"><div class="card-head"><span class="card-title">Controller Event Log</span></div><div class="card-body"><pre class="log" id="evtLog" style="max-height:600px">Loading events...</pre></div></div>
+</div>
+
+<!-- PC SIMULATOR -->
+<div class="page" id="pg-pcsim">
+<!-- Top toolbar -->
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+  <span style="font-size:13px;font-weight:700;color:var(--txt)">End-Device Activity Simulator</span>
+  <span style="font-size:11px;color:var(--dim);flex:1">Click any PC to configure its activity. Traffic originates from real host namespaces.</span>
+  <button class="btn" id="btnCapture">◎ Capture Baseline</button>
+  <button class="btn danger" id="btnResetAll">■ Reset All</button>
+</div>
+
+<!-- KPI row for PC simulator -->
+<div class="kpi-row" style="margin-bottom:16px">
+  <div class="kpi r"><div class="kpi-label">Active PCs</div><div class="kpi-value" id="pcKpiActive">0</div><div class="kpi-sub">generating traffic</div></div>
+  <div class="kpi b"><div class="kpi-label">Total Traffic</div><div class="kpi-value" id="pcKpiTotal">0</div><div class="kpi-sub">Mbps combined</div></div>
+  <div class="kpi a"><div class="kpi-label">High Priority</div><div class="kpi-value" id="pcKpiHighPri">0</div><div class="kpi-sub">critical / high flows</div></div>
+  <div class="kpi g"><div class="kpi-label">Baseline</div><div class="kpi-value" id="pcKpiBaseline">—</div><div class="kpi-sub" id="pcKpiBaselineSub">not captured</div></div>
+</div>
+
+<!-- Quick scenario buttons -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Quick Scenario Setup</span><span style="font-size:11px;color:var(--dim)">Apply pre-defined multi-PC activity patterns</span></div>
+  <div class="card-body">
+    <div class="scenario-quick">
+      <button class="sq-btn" data-scenario="canonical">📋 Canonical Demo<br><small>6 PCs — one per activity type</small></button>
+      <button class="sq-btn" data-scenario="staff_heavy">🏢 Staff Heavy<br><small>All staff PCs active</small></button>
+      <button class="sq-btn" data-scenario="security_test">⚡ Security Test<br><small>DDoS vs exam traffic</small></button>
+      <button class="sq-btn" data-scenario="congestion">🌊 Congestion<br><small>Heavy bandwidth load</small></button>
+    </div>
+    <pre class="log" id="simLog" style="margin-top:8px;min-height:36px">Select a quick scenario above, or configure individual PCs below.</pre>
+  </div>
+</div>
+
+<div class="pcsim-layout">
+  <!-- Left: PC grid -->
+  <div>
+    <!-- Zone tabs -->
+    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <button class="btn active" id="zoneAll" onclick="filterZone('all')">All (10)</button>
+      <button class="btn" id="zoneStaff" onclick="filterZone('staff_lan')">Staff LAN (3)</button>
+      <button class="btn" id="zoneLab" onclick="filterZone('it_lab')">IT Lab (3)</button>
+      <button class="btn" id="zoneWifi" onclick="filterZone('student_wifi')">Student WiFi (4)</button>
+      <button class="btn" id="zoneExternal" onclick="filterZone('external_vm')">External VM</button>
+    </div>
+    <div class="pc-grid" id="pcGrid">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- Right: Config panel -->
+  <div class="config-panel">
+    <div class="card-head">
+      <span class="card-title" id="cfgTitle">Select a PC</span>
+    </div>
+    <div style="padding:14px 16px">
+      <div id="cfgPcInfo" style="margin-bottom:12px;display:none">
+        <div style="font-size:11px;color:var(--dim);margin-bottom:4px" id="cfgPcMeta">—</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+          <span style="font-size:11px;color:var(--dim)">Current:</span>
+          <span class="pc-activity-badge" id="cfgCurrentAct" style="--c:#64748b">Idle</span>
+          <span class="priority-badge" id="cfgPriority">P5</span>
+        </div>
+        <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Set Activity</div>
+      </div>
+      <div id="activityButtons">
+        <div style="font-size:12px;color:var(--dim);padding:20px 0;text-align:center">Click a PC card to configure its activity</div>
+      </div>
+
+      <!-- Live stats for selected PC -->
+      <div id="cfgLiveStats" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+        <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Live Statistics</div>
+        <div class="stat"><span class="stat-k">Traffic Rate</span><span class="stat-v g" id="cfgLiveBw">0 Mbps</span></div>
+        <div class="stat"><span class="stat-k">Priority</span><span class="stat-v b" id="cfgLivePri">—</span></div>
+        <div class="stat"><span class="stat-k">DSCP Mark</span><span class="stat-v" id="cfgLiveDscp">—</span></div>
+        <div class="stat"><span class="stat-k">Active Since</span><span class="stat-v" id="cfgLiveSince">—</span></div>
+        <div class="stat"><span class="stat-k">Zone</span><span class="stat-v" id="cfgLiveZone">—</span></div>
+      </div>
+    </div>
+
+    <!-- Baseline comparison -->
+    <div style="padding:0 16px 14px" id="baselinePanel" style="display:none">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-top:14px;border-top:1px solid var(--border)">Before / After Comparison</div>
+      <div id="baselineCompare">
+        <div style="font-size:11px;color:var(--dim);text-align:center;padding:12px 0">Capture a baseline first</div>
+      </div>
+    </div>
+</div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     INTELLIGENCE PAGE — KPIs + Gap Analysis + Traffic Profile Matrix + K-Means
+     ══════════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="pg-intelligence">
+<div class="kpi-row" id="intelligenceKpis">
+  <div class="kpi g"><div class="kpi-label">Convergence Time</div><div class="kpi-value" id="kpiConv">—</div><div class="kpi-sub">target &lt;100ms</div></div>
+  <div class="kpi b"><div class="kpi-label">Throughput Gain</div><div class="kpi-value" id="kpiGain">—</div><div class="kpi-sub">Staff LAN vs legacy baseline</div></div>
+  <div class="kpi g"><div class="kpi-label">Security Efficacy</div><div class="kpi-value" id="kpiEff">—</div><div class="kpi-sub">detected vs blocked</div></div>
+  <div class="kpi a"><div class="kpi-label">Staff LAN Latency</div><div class="kpi-value" id="kpiSLO">—</div><div class="kpi-sub">SLO target &lt;20ms</div></div>
+</div>
+
+<!-- MARL Agent Status - top so it's visible first -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">MARL System — Dual-Agent Status</span><span style="font-size:11px;color:var(--dim)">DQN Traffic Agent + Security Agent cooperating in real-time</span></div>
+  <div class="card-body">
+    <div class="split-2">
+      <div>
+        <div style="font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Agent 1 — DQN Traffic Agent (16 actions)</div>
+        <pre class="log" id="marlDqnPane" style="max-height:220px">Loading DQN state...</pre>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;color:#10d9a0;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Agent 2 — Security Agent (Q-Table)</div>
+        <pre class="log" id="marlSecPane" style="max-height:220px">Loading security agent state...</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gap Analysis + KPIs -->
+<div class="split-2" style="margin-bottom:14px">
+<div class="card">
+  <div class="card-head">
+    <span class="card-title">Gap Analysis — Legacy vs SDN</span>
+    <span style="font-size:11px;color:var(--dim)" id="gapSummaryBadge">Loading...</span>
+  </div>
+  <div class="card-body" style="overflow-x:auto;overflow-y:auto;max-height:280px">
+    <table class="zone-table" style="min-width:480px">
+      <thead><tr>
+        <th>Metric</th><th>Legacy</th><th>SDN</th>
+        <th>Δ</th><th>Status</th>
+      </tr></thead>
+      <tbody id="gapBody"><tr><td colspan="5" style="color:var(--dim)">Loading...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- K-Means + Time-Series stacked -->
+<div class="stack-col">
+<div class="card">
+  <div class="card-head"><span class="card-title">K-Means Traffic Clusters</span><span style="font-size:11px;color:var(--dim)" id="clusterInfo">—</span></div>
+  <div class="card-body" style="max-height:120px;overflow-y:auto"><div id="clusterList"><span style="color:var(--dim);font-size:12px">Loading clusters...</span></div></div>
+</div>
+<div class="card">
+  <div class="card-head"><span class="card-title">Time-Series Peak Analysis</span><span style="font-size:11px;color:var(--dim)" id="tsInfo">—</span></div>
+  <div class="card-body" style="max-height:120px;overflow-y:auto"><div id="tsList"><span style="color:var(--dim);font-size:12px">Collecting samples...</span></div></div>
+</div>
+</div>
+</div>
+
+<!-- Traffic Profile Matrix -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head">
+    <span class="card-title">Traffic Profile Matrix</span>
+    <span style="font-size:11px;color:var(--dim)">Zone × Priority × Bandwidth × Security</span>
+  </div>
+  <div class="card-body" style="overflow-x:auto">
+    <table class="zone-table" style="min-width:700px" id="trafProfileTbl">
+      <thead><tr>
+        <th>Zone</th><th>VLAN</th><th>Priority</th>
+        <th>BW Target</th><th>Perf. Target</th>
+        <th>Security</th><th>Live Util</th>
+      </tr></thead>
+      <tbody id="trafProfileBody"><tr><td colspan="7" style="color:var(--dim)">Loading...</td></tr></tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     PROACTIVE CONGESTION MANAGEMENT PAGE
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="pg-proactive">
+
+<!-- KPI bar -->
+<div class="kpi-row">
+  <div class="kpi g"><div class="kpi-label">Controller Link</div><div class="kpi-value" id="pcCtrlUtil">0%</div><div class="kpi-sub" id="pcCtrlMbps">0 / 1000 Mbps</div></div>
+  <div class="kpi b"><div class="kpi-label">Zones in Warning+</div><div class="kpi-value" id="pcWarnCount">0</div><div class="kpi-sub">≥70% utilization</div></div>
+  <div class="kpi a"><div class="kpi-label">Port Saturations</div><div class="kpi-value" id="pcSatCount">0</div><div class="kpi-sub">devices ≥85 Mbps</div></div>
+  <div class="kpi r"><div class="kpi-label">Active Alerts</div><div class="kpi-value" id="pcAlertCount">0</div><div class="kpi-sub">this cycle</div></div>
+</div>
+
+<!-- Threshold model legend -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">4-State Utilization Threshold Model</span></div>
+  <div class="card-body">
+    <div class="split-4">
+      <div style="background:rgba(16,217,160,.08);border:1px solid rgba(16,217,160,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#10d9a0">0–70%</div>
+        <div style="font-size:11px;font-weight:700;color:#10d9a0;margin:4px 0">HEALTHY</div>
+        <div style="font-size:10px;color:var(--dim)">Monitor only</div>
+      </div>
+      <div style="background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#eab308">70–85%</div>
+        <div style="font-size:11px;font-weight:700;color:#eab308;margin:4px 0">WARNING</div>
+        <div style="font-size:10px;color:var(--dim)">Predict congestion</div>
+      </div>
+      <div style="background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#f97316">85–90%</div>
+        <div style="font-size:11px;font-weight:700;color:#f97316;margin:4px 0">PREVENTIVE</div>
+        <div style="font-size:10px;color:var(--dim)">Apply control actions</div>
+      </div>
+      <div style="background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:10px;text-align:center">
+        <div style="font-size:18px;font-weight:800;color:#ef4444">90–100%</div>
+        <div style="font-size:11px;font-weight:700;color:#ef4444;margin:4px 0">CRITICAL</div>
+        <div style="font-size:10px;color:var(--dim)">Aggressive mitigation</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Zone analysis grid -->
+<div class="grid2" style="margin-bottom:14px">
+  <div class="card">
+    <div class="card-head"><span class="card-title">Zone Threshold States</span><span style="font-size:10px;color:var(--dim)">Real-time · 2s refresh</span></div>
+    <div class="card-body" id="pcZoneStates"><div style="color:var(--dim);font-size:12px">Loading…</div></div>
+  </div>
+  <div class="card">
+    <div class="card-head"><span class="card-title">Future Load Prediction</span><span style="font-size:10px;color:var(--dim)">Current + Growth + Trend</span></div>
+    <div class="card-body" id="pcFutureLoad"><div style="color:var(--dim);font-size:12px">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Network aggregation chain -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Traffic Aggregation Chain</span><span style="font-size:10px;color:var(--dim)">Device → Access → Distribution → Controller</span></div>
+  <div class="card-body" id="pcAggChain">
+    <div style="color:var(--dim);font-size:12px">Loading…</div>
+  </div>
+</div>
+
+<!-- Edge device saturation -->
+<div class="card" style="margin-bottom:14px">
+  <div class="card-head"><span class="card-title">Edge Device Saturation Detection</span><span style="font-size:10px;color:var(--dim)">PC ↔ Access Switch — 100 Mbps port capacity</span></div>
+  <div class="card-body" id="pcSatList"><div style="color:var(--dim);font-size:12px">No saturation detected</div></div>
+</div>
+
+<!-- Structured alerts -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Structured Alerts (§8 Format)</span><span style="font-size:10px;color:var(--dim)" id="pcAlertTs">—</span></div>
+  <div class="card-body" id="pcStructuredAlerts"><div style="color:var(--dim);font-size:12px">No alerts</div></div>
+</div>
+
+</div><!-- end pg-proactive -->
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     IBN CONTROL PAGE — Intent-Based Networking
+     ══════════════════════════════════════════════════════════════════════ -->
+<div class="page" id="pg-ibn">
+<div class="kpi-row">
+  <div class="kpi b"><div class="kpi-label">Active Intents</div><div class="kpi-value" id="ibnActiveCount">0</div><div class="kpi-sub">currently enforced</div></div>
+  <div class="kpi g"><div class="kpi-label">IBN Engine</div><div class="kpi-value" id="ibnStatus">—</div><div class="kpi-sub">intent translator</div></div>
+  <div class="kpi a"><div class="kpi-label">Current Action</div><div class="kpi-value" id="ibnCurAction" style="font-size:14px">—</div><div class="kpi-sub">from active intent</div></div>
+  <div class="kpi g"><div class="kpi-label">Total Submitted</div><div class="kpi-value" id="ibnTotal">0</div><div class="kpi-sub">this session</div></div>
+</div>
+
+<div class="split-3-2">
+<!-- Submit Intent -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Submit Network Intent</span><span style="font-size:11px;color:var(--dim)">"What" not "How" — natural language policy</span></div>
+  <div class="card-body">
+    <div style="margin-bottom:12px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Quick Intents — click to submit instantly</div>
+      <div class="ibn-grid">
+        <button class="ibn-btn" data-intent="Prioritize Staff LAN">🏢 Staff LAN Priority</button>
+        <button class="ibn-btn" data-intent="Prioritize Labs">🔬 Prioritize Labs</button>
+        <button class="ibn-btn" data-intent="Exam Mode">📝 Exam Mode</button>
+        <button class="ibn-btn" data-intent="Academic First">🎓 Academic First</button>
+        <button class="ibn-btn" data-intent="Load Balance">⚖ Load Balance</button>
+        <button class="ibn-btn" data-intent="Protect Server Zone">🖥 Protect Servers</button>
+        <button class="ibn-btn" data-intent="Block Student WiFi">🚫 Block Student WiFi</button>
+        <button class="ibn-btn" data-intent="Peak Hour">⏰ Peak Hour Mode</button>
+        <button class="ibn-btn" data-intent="Restore Normal">↺ Restore Normal</button>
+      </div>
+    </div>
+    <div style="margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Custom Intent</div>
+      <input id="ibnTextInput" type="text" placeholder='e.g. "Prioritize Staff LAN" or "Exam Mode"'
+        style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;color:var(--txt);font-size:12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:11px;color:var(--dim)">Duration:</label>
+        <select id="ibnDuration" style="background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:4px 8px;color:var(--txt);font-size:12px">
+          <option value="900">15 min</option>
+          <option value="1800">30 min</option>
+          <option value="3600" selected>1 hour</option>
+          <option value="7200">2 hours</option>
+          <option value="0">Indefinite</option>
+        </select>
+        <button class="btn primary" id="btnIbnSubmit">▶ Submit Intent</button>
+      </div>
+    </div>
+    <pre class="log" id="ibnLog" style="max-height:120px">Ready — submit an intent to control the network.</pre>
+  </div>
+</div>
+
+<!-- Active Intents -->
+<div class="card">
+  <div class="card-head"><span class="card-title">Active Intents</span><button class="btn" id="btnIbnRefresh" style="font-size:11px;padding:4px 10px">↺</button></div>
+  <div class="card-body" style="max-height:420px;overflow-y:auto">
+    <div id="ibnIntentList"><span style="font-size:12px;color:var(--dim)">No active intents.</span></div>
+  </div>
+</div>
+</div>
+
+<!-- Action Catalogue -->
+<div class="card" style="margin-top:0">
+  <div class="card-head"><span class="card-title">Intent Catalogue — Available Actions</span><span style="font-size:11px;color:var(--dim)">Natural language → SDN policy</span></div>
+  <div class="card-body" style="overflow-x:auto;max-height:340px;overflow-y:auto">
+    <table class="zone-table" id="ibnCatalogueTbl" style="min-width:560px">
+      <thead><tr><th>Intent ID</th><th>SDN Action</th><th>Description</th></tr></thead>
+      <tbody id="ibnCatalogueBody"><tr><td colspan="3" style="color:var(--dim)">Loading...</td></tr></tbody>
+    </table>
+</div>
+</div>
+</div>
+
+</div>
+</div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+let selectedScenario = '';
+let socket = null;
+let _metricsCache = {};
+let dashboardBooted = false;
+let realtimeBooted = false;
+
+// Navigation
+function activatePage(pg) {
+  const button = document.querySelector(`.nav-btn[data-page="${pg}"]`);
+  const page = document.querySelector(`#pg-${pg}`);
+  if (!button || !page) return false;
+  $$('.nav-btn').forEach(b => b.classList.remove('active'));
+  button.classList.add('active');
+  $$('.page').forEach(p => p.classList.remove('active'));
+  page.classList.add('active');
+  $('#pageTitle').textContent = button.textContent.trim();
+  const url = new URL(window.location.href);
+  url.searchParams.set('page', pg);
+  history.replaceState({}, '', `${url.pathname}?${url.searchParams.toString()}#${pg}`);
+  return true;
+}
+
+function initialPage() {
+  const url = new URL(window.location.href);
+  const fromQuery = (url.searchParams.get('page') || '').trim();
+  const fromHash = (window.location.hash || '').replace(/^#/, '').trim();
+  return fromQuery || fromHash || 'overview';
+}
+
+$$('.nav-btn').forEach(btn => btn.addEventListener('click', () => {
+  activatePage(btn.dataset.page);
+}));
+
+window.addEventListener('hashchange', () => {
+  activatePage(initialPage());
+});
+
+// Scenario selection
+$$('.scenario-btn').forEach(btn => btn.addEventListener('click', () => {
+  $$('.scenario-btn').forEach(b => b.classList.remove('sel'));
+  btn.classList.add('sel');
+  selectedScenario = btn.dataset.sc;
+}));
+$('#btnStartSc').addEventListener('click', () => {
+  if(!selectedScenario){$('#scLog').textContent='Select a scenario first.';return}
+  $('#scLog').textContent=`Starting ${selectedScenario}...`;
+  fetch('/api/scenario',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenario:selectedScenario})})
+    .then(r=>r.json()).then(d=>$('#scLog').textContent=JSON.stringify(d,null,2))
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+$('#btnStopSc').addEventListener('click', () => {
+  fetch('/api/scenario',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({scenario:'stop_reset'})})
+    .then(r=>r.json()).then(d=>{
+      $('#scLog').textContent = JSON.stringify(d,null,2);
+      selectedScenario = '';
+      $$('.scenario-btn').forEach(b => b.classList.remove('sel'));
+      setTimeout(()=>refresh(), 400);
+    })
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+
+// ─── TOPOLOGY DEFINITIONS ───────────────────────────────────────────
+const SWITCHES = [
+  {id:'cs1', x:550, y:55,  label:'SDN Controller',        sublabel:'cs1 • dpid:1', type:'core',   dpid:'1'},
+  {id:'ds1', x:300, y:185, label:'Distribution Switch 1', sublabel:'ds1 • dpid:2', type:'dist',   dpid:'2'},
+  {id:'ds2', x:800, y:185, label:'Distribution Switch 2', sublabel:'ds2 • dpid:3', type:'dist',   dpid:'3'},
+  {id:'as1', x:110, y:340, label:'Access SW — Staff',     sublabel:'as1 • dpid:4', type:'access', dpid:'4'},
+  {id:'as2', x:390, y:340, label:'Access SW — Server',    sublabel:'as2 • dpid:5', type:'access', dpid:'5'},
+  {id:'as3', x:650, y:340, label:'Access SW — Lab',       sublabel:'as3 • dpid:6', type:'access', dpid:'6'},
+  {id:'as4', x:970, y:340, label:'Access SW — WiFi',      sublabel:'as4 • dpid:7', type:'access', dpid:'7'},
+  {id:'ovs_ext', x:930, y:520, label:'External VMware OVS', sublabel:'ovs_ext • dpid:8', type:'access', dpid:'8'},
+];
+const SW_LINKS = [
+  {src:'cs1', dst:'ds1', zone:null},
+  {src:'cs1', dst:'ds2', zone:null},
+  {src:'ds1', dst:'as1', zone:'staff_lan'},
+  {src:'ds1', dst:'as2', zone:'server_zone'},
+  {src:'ds2', dst:'as3', zone:'it_lab'},
+  {src:'ds2', dst:'as4', zone:'student_wifi'},
+  {src:'ds2', dst:'ovs_ext', zone:'external_vm'},
+];
+const HOSTS = [
+  // Staff LAN — 6 PCs
+  {id:'h_staff1', sw:'as1', label:'Staff-PC1', ip:'10.10.0.1', icon:'💻', clickable:true},
+  {id:'h_staff2', sw:'as1', label:'Staff-PC2', ip:'10.10.0.2', icon:'💻', clickable:true},
+  {id:'h_staff3', sw:'as1', label:'Staff-PC3', ip:'10.10.0.3', icon:'💻', clickable:true},
+  {id:'h_staff4', sw:'as1', label:'Staff-PC4', ip:'10.10.0.4', icon:'💻', clickable:true},
+  {id:'h_staff5', sw:'as1', label:'Staff-PC5', ip:'10.10.0.5', icon:'💻', clickable:true},
+  {id:'h_staff6', sw:'as1', label:'Staff-PC6', ip:'10.10.0.6', icon:'💻', clickable:true},
+  // Server Zone — 4 servers (not clickable for activity)
+  {id:'h_mis',    sw:'as2', label:'MIS Server',   ip:'10.20.0.1', icon:'🖥', clickable:false},
+  {id:'h_dhcp',   sw:'as2', label:'DHCP Server',  ip:'10.20.0.2', icon:'🖥', clickable:false},
+  {id:'h_auth',   sw:'as2', label:'Auth Server',  ip:'10.20.0.3', icon:'🖥', clickable:false},
+  {id:'h_moodle', sw:'as2', label:'Moodle LMS',   ip:'10.20.0.4', icon:'🖥', clickable:false},
+  // IT Lab — 4 PCs
+  {id:'h_lab1',  sw:'as3', label:'Lab-PC1', ip:'10.30.0.1', icon:'🖥', clickable:true},
+  {id:'h_lab2',  sw:'as3', label:'Lab-PC2', ip:'10.30.0.2', icon:'🖥', clickable:true},
+  {id:'h_lab3',  sw:'as3', label:'Lab-PC3', ip:'10.30.0.3', icon:'🖥', clickable:true},
+  {id:'h_lab4',  sw:'as3', label:'Lab-PC4', ip:'10.30.0.4', icon:'🖥', clickable:true},
+  // Student WiFi — 10 devices
+  {id:'h_wifi1', sw:'as4', label:'Student-PC1', ip:'10.40.0.1', icon:'📱', clickable:true},
+  {id:'h_wifi2', sw:'as4', label:'Student-PC2', ip:'10.40.0.2', icon:'📱', clickable:true},
+  {id:'h_wifi3', sw:'as4', label:'Student-PC3', ip:'10.40.0.3', icon:'📱', clickable:true},
+  {id:'h_wifi4', sw:'as4', label:'Student-PC4', ip:'10.40.0.4', icon:'📱', clickable:true},
+  {id:'h_wifi5', sw:'as4', label:'Student-PC5', ip:'10.40.0.5', icon:'📱', clickable:true},
+  {id:'h_wifi6', sw:'as4', label:'Student-PC6', ip:'10.40.0.6', icon:'📱', clickable:true},
+  {id:'h_wifi7', sw:'as4', label:'Student-PC7', ip:'10.40.0.7', icon:'📱', clickable:true},
+  {id:'h_wifi8', sw:'as4', label:'Student-PC8', ip:'10.40.0.8', icon:'📱', clickable:true},
+  {id:'h_wifi9', sw:'as4', label:'Student-PC9', ip:'10.40.0.9', icon:'📱', clickable:true},
+  {id:'h_wifi10', sw:'as4', label:'Student-PC10', ip:'10.40.0.10', icon:'📱', clickable:true},
+  {id:'ext_win10', sw:'ovs_ext', label:'Windows 10 VM', ip:'10.50.0.10', icon:'🪟', clickable:true},
+];
+
+function proactiveLink(src, dst) {
+  return proactiveState?.link_index?.[`${src}-${dst}`] || null;
+}
+
+function numeric(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function proactiveDeviceLinks() {
+  const links = proactiveState?.per_device_links;
+  if (Array.isArray(links)) return links;
+  if (links && typeof links === 'object') return Object.values(links);
+  return [];
+}
+
+function mergedTrafficSources() {
+  const merged = new Map();
+  const consume = (info, fallbackKey = '') => {
+    if (!info) return;
+    const key = info.host || info.id || info.ip || fallbackKey;
+    if (!key) return;
+    const currentMbps = numeric(info.current_mbps ?? info.traffic_mbps, 0);
+    const existing = merged.get(key);
+    if (!existing || currentMbps >= numeric(existing.current_mbps ?? existing.traffic_mbps, 0)) {
+      merged.set(key, {...existing, ...info, host: info.host || fallbackKey || existing?.host || key});
+    }
+  };
+
+  proactiveDeviceLinks().forEach(info => consume(info));
+  Object.entries(pcState || {}).forEach(([host, info]) => consume(info, host));
+  return [...merged.values()];
+}
+
+function priorityWeight(level) {
+  const weights = {ATTACK:0, CRITICAL:1, HIGH:2, MEDIUM:3, LOW:4, 'BEST-EFFORT':5};
+  return weights[String(level || 'BEST-EFFORT').toUpperCase()] ?? 5;
+}
+
+function strongerState(current, next) {
+  const order = {healthy:0, warning:1, preventive:2, critical:3};
+  return (order[next] ?? -1) > (order[current] ?? -1) ? next : current;
+}
+
+function inferThresholdState(utilPct, latencyMs = 0, queueDepth = 0, packetDrops = 0) {
+  if (utilPct >= 90 || packetDrops > 0 || latencyMs >= 40 || queueDepth >= 35) return 'critical';
+  if (utilPct >= 85) return 'preventive';
+  if (utilPct >= 70 || latencyMs >= 20 || queueDepth >= 18) return 'warning';
+  return 'healthy';
+}
+
+function serverInboundTelemetry(host) {
+  const inbound = {
+    activity: 'server_inbound',
+    activity_label: 'Idle',
+    traffic_type: 'Server Traffic',
+    priority_level: 'BEST-EFFORT',
+    current_mbps: 0,
+    capacity_mbps: 100,
+    utilization_percent: 0,
+    threshold_state: 'healthy',
+    packet_drops: 0,
+    queue_depth: 0,
+    latency_ms: 0,
+    active_flows: 0,
+  };
+  const trafficMix = {};
+
+  const consume = (info) => {
+    if (!info || String(info.dst_ip || '') !== host.ip) return;
+    const mbps = numeric(info.current_mbps ?? info.traffic_mbps, 0);
+    if (mbps <= 0) return;
+    inbound.current_mbps += mbps;
+    inbound.active_flows += 1;
+    const trafficType = info.traffic_type || info.activity_label || info.activity || 'Server Traffic';
+    trafficMix[trafficType] = (trafficMix[trafficType] || 0) + mbps;
+    inbound.packet_drops += numeric(info.packet_drops, 0);
+    inbound.queue_depth = Math.max(inbound.queue_depth, numeric(info.queue_depth, 0));
+    inbound.latency_ms = Math.max(inbound.latency_ms, numeric(info.latency_ms, 0));
+    inbound.threshold_state = strongerState(inbound.threshold_state, info.threshold_state || 'healthy');
+    const nextPriority = info.priority_level || PRI_LABELS[numeric(info.priority, 5)] || 'BEST-EFFORT';
+    if (priorityWeight(nextPriority) < priorityWeight(inbound.priority_level)) inbound.priority_level = nextPriority;
+  };
+
+  mergedTrafficSources().forEach(consume);
+
+  inbound.utilization_percent = (inbound.current_mbps / inbound.capacity_mbps) * 100;
+  inbound.traffic_type = Object.entries(trafficMix).sort((a, b) => b[1] - a[1])[0]?.[0] || 'Server Traffic';
+  inbound.activity_label = inbound.active_flows ? `${inbound.traffic_type} Inbound` : 'Idle';
+  if (inbound.current_mbps > 0.05) {
+    inbound.threshold_state = strongerState(
+      inbound.threshold_state,
+      inferThresholdState(inbound.utilization_percent, inbound.latency_ms, inbound.queue_depth, inbound.packet_drops)
+    );
+  }
+  return inbound;
+}
+
+function hostTelemetry(host) {
+  if (!host.clickable) {
+    const edgeLink = proactiveLink(host.id, host.sw);
+    if (edgeLink) {
+      const currentMbps = numeric(edgeLink.current_mbps, 0);
+      const capacityMbps = numeric(edgeLink.capacity_mbps, 100);
+      const thresholdState = edgeLink.threshold_state || inferThresholdState(
+        numeric(edgeLink.utilization_percent, capacityMbps > 0 ? (currentMbps / capacityMbps) * 100 : 0),
+        numeric(edgeLink.latency_ms, 0),
+        numeric(edgeLink.queue_depth, 0),
+        numeric(edgeLink.packet_drops, 0)
+      );
+      const stroke = linkColor(currentMbps, capacityMbps, thresholdState);
+      return {
+        ...edgeLink,
+        active: currentMbps > 0.05,
+        display_label: edgeLink.activity_label || edgeLink.traffic_type || 'Server Traffic',
+        display_icon: host.icon,
+        link_stroke: stroke,
+        node_color: currentMbps > 0.05 ? stroke : '#06b6d4',
+        activity_def: ACTIVITY_DEFS.idle,
+      };
+    }
+
+    const serverInfo = serverInboundTelemetry(host);
+    const active = serverInfo.current_mbps > 0.05;
+    const stroke = linkColor(serverInfo.current_mbps, serverInfo.capacity_mbps, serverInfo.threshold_state || '');
+    return {
+      ...serverInfo,
+      active,
+      display_label: serverInfo.traffic_type || 'Server Traffic',
+      display_icon: host.icon,
+      link_stroke: stroke,
+      node_color: active ? stroke : '#06b6d4',
+      activity_def: ACTIVITY_DEFS.idle,
+    };
+  }
+
+  const pci = pcState[host.id] || {};
+  const edgeLink = proactiveLink(host.id, host.sw);
+  const activity = (edgeLink && edgeLink.activity) || pci.activity || 'idle';
+  const activityDef = ACTIVITY_DEFS[activity] || ACTIVITY_DEFS.idle;
+  const currentMbps = edgeLink ? numeric(edgeLink.current_mbps, 0) : numeric(pci.current_mbps ?? pci.traffic_mbps, 0);
+  const capacityMbps = edgeLink ? numeric(edgeLink.capacity_mbps, 100) : 100;
+  const latencyMs = edgeLink ? numeric(edgeLink.latency_ms, numeric(pci.latency_ms, 0)) : numeric(pci.latency_ms, 0);
+  const queueDepth = edgeLink ? numeric(edgeLink.queue_depth, numeric(pci.queue_depth, 0)) : numeric(pci.queue_depth, 0);
+  const packetDrops = edgeLink ? numeric(edgeLink.packet_drops, numeric(pci.packet_drops, 0)) : numeric(pci.packet_drops, 0);
+  const utilizationPercent = edgeLink
+    ? numeric(edgeLink.utilization_percent, capacityMbps > 0 ? (currentMbps / capacityMbps) * 100 : 0)
+    : (capacityMbps > 0 ? (currentMbps / capacityMbps) * 100 : 0);
+  const thresholdState = edgeLink?.threshold_state || inferThresholdState(utilizationPercent, latencyMs, queueDepth, packetDrops);
+  const active = activity !== 'idle' && currentMbps > 0.05;
+
+  return {
+    activity,
+    activity_label: edgeLink?.activity_label || activityDef.label,
+    traffic_type: edgeLink?.traffic_type || pci.traffic_type || activityDef.label,
+    priority_level: edgeLink?.priority_level || pci.priority_level || PRI_LABELS[numeric(pci.priority, activityDef.pri)] || 'BEST-EFFORT',
+    current_mbps: currentMbps,
+    capacity_mbps: capacityMbps,
+    utilization_percent: utilizationPercent,
+    threshold_state: thresholdState,
+    packet_drops: packetDrops,
+    queue_depth: queueDepth,
+    latency_ms: latencyMs,
+    active,
+    display_label: activityDef.label,
+    display_icon: active ? activityDef.icon : host.icon,
+    link_stroke: linkColor(currentMbps, capacityMbps, thresholdState),
+    node_color: activityDef.color,
+    activity_def: activityDef,
+  };
+}
+
+// ─── Link bandwidth helper: derive Mbps from proactive link state ───────────
+function linkMbps(src, dst, zm) {
+  const proactive = proactiveLink(src, dst);
+  if (proactive && proactive.current_mbps !== undefined) return proactive.current_mbps || 0;
+  const lz = {
+    'ds1-as1':'staff_lan','as1-ds1':'staff_lan',
+    'ds1-as2':'server_zone','as2-ds1':'server_zone',
+    'ds2-as3':'it_lab','as3-ds2':'it_lab',
+    'ds2-as4':'student_wifi','as4-ds2':'student_wifi',
+    'ds2-ovs_ext':'external_vm','ovs_ext-ds2':'external_vm',
+  };
+  const k = `${src}-${dst}`;
+  if (lz[k]) return (zm[lz[k]]||{}).throughput_mbps||0;
+  // Core uplinks: sum the zones they serve (aggregation)
+  if (src==='cs1'||dst==='cs1') {
+    const other = src==='cs1'?dst:src;
+    if (other==='ds1') return ((zm.staff_lan||{}).throughput_mbps||0)+((zm.server_zone||{}).throughput_mbps||0);
+    if (other==='ds2') return ((zm.it_lab||{}).throughput_mbps||0)+((zm.student_wifi||{}).throughput_mbps||0)+((zm.external_vm||{}).throughput_mbps||0);
+  }
+  return 0;
+}
+
+// Return link capacity in Mbps based on link type
+function linkCapacity(src, dst) {
+  const proactive = proactiveLink(src, dst);
+  if (proactive && proactive.capacity_mbps) return proactive.capacity_mbps;
+  // PC ↔ Access: 100 Mbps (handled in host-link draw)
+  // Access ↔ Distribution: 1000 Mbps
+  // Distribution ↔ Core: 1000 Mbps
+  const accessNodes = new Set(['as1','as2','as3','as4']);
+  const distNodes   = new Set(['ds1','ds2']);
+  if ((accessNodes.has(src) && distNodes.has(dst)) ||
+      (distNodes.has(src) && accessNodes.has(dst))) return 1000;
+  return 1000; // distribution ↔ core
+}
+
+// 4-state utilization color model (Req §4.2 & §9)
+// Green 0-70% | Yellow 70-85% | Orange 85-90% | Red 90-100%
+function utilColor(utilPct) {
+  if (utilPct >= 90) return '#ef4444';    // critical — red
+  if (utilPct >= 85) return '#f97316';    // preventive — orange
+  if (utilPct >= 70) return '#eab308';    // warning — yellow
+  if (utilPct >  0)  return '#10d9a0';    // healthy — green
+  return '#1e3a5f';                       // idle
+}
+
+function linkColor(mbps, capacityMbps, state='') {
+  if (state && ({healthy:1,warning:1,preventive:1,critical:1})[state]) {
+    return utilColor({healthy:1,warning:70,preventive:85,critical:90}[state]);
+  }
+  if (capacityMbps <= 0) return '#1e3a5f';
+  return utilColor(mbps / capacityMbps * 100);
+}
+function linkWidth(mbps) { return Math.max(1.5, Math.min(8, 1.5 + mbps * 0.35)); }
+
+let topoAnimFrame = 0;
+let _lastTopoMetrics = null;
+
+function drawTopology(metrics) {
+  if (metrics) _lastTopoMetrics = metrics;
+  else metrics = _lastTopoMetrics || {};
+  topoAnimFrame++;
+  const svg = $('#topoSvg');
+  const swMap = {};
+  SWITCHES.forEach(s => swMap[s.id] = s);
+  const zm = metrics.zone_metrics || {};
+  const ps = metrics.switch_port_stats || {};
+
+  // Host positions — fan out below their access switch
+  const hostGroups = {};
+  HOSTS.forEach(h => { if (!hostGroups[h.sw]) hostGroups[h.sw] = []; hostGroups[h.sw].push(h); });
+  const hostPos = {};
+  for (const [swId, hosts] of Object.entries(hostGroups)) {
+    const sw = swMap[swId]; if (!sw) continue;
+    const n = hosts.length;
+    const spread = Math.min(n * 52, 300);
+    const startX = sw.x - spread / 2;
+    const hostY = sw.y + 135;
+    hosts.forEach((h, i) => {
+      hostPos[h.id] = { x: startX + (spread / (n - 1 || 1)) * i, y: hostY };
+    });
+  }
+
+  let html = '';
+
+  // ── Zone background bands ──────────────────────────────────────
+  const zoneBands = [
+    {x:20,  w:230, color:'#10d9a0', label:'Staff LAN'},
+    {x:270, w:240, color:'#06b6d4', label:'Server Zone'},
+    {x:530, w:240, color:'#a855f7', label:'IT Lab'},
+    {x:800, w:270, color:'#f59e0b', label:'Student WiFi'},
+  ];
+  zoneBands.forEach(b => {
+    html += `<rect x="${b.x}" y="475" width="${b.w}" height="170" rx="10" fill="${b.color}" opacity="0.03" stroke="${b.color}" stroke-width="0.5" opacity="0.15"/>`;
+  });
+
+  // ── Switch-to-switch links ─────────────────────────────────────
+  SW_LINKS.forEach(l => {
+    const s = swMap[l.src], d = swMap[l.dst]; if (!s || !d) return;
+    const pLink = proactiveLink(l.src, l.dst);
+    const mbps = linkMbps(l.src, l.dst, zm);
+    const cap  = linkCapacity(l.src, l.dst);
+    const util = cap > 0 ? mbps / cap * 100 : 0;
+    const col  = linkColor(mbps, cap, pLink?.threshold_state || '');
+    const w    = linkWidth(mbps);
+    const mx   = (s.x + d.x) / 2, my = (s.y + d.y) / 2;
+    const opacity = mbps > 0.1 ? 0.9 : 0.35;
+
+    // Link line
+    html += `<line x1="${s.x}" y1="${s.y}" x2="${d.x}" y2="${d.y}" stroke="${col}" stroke-width="${w}" opacity="${opacity}" stroke-linecap="round"/>`;
+
+    // Label: "X.X / 1000 Mbps (Z%)" — Req §9 format
+    if (mbps > 0.05) {
+      const bwLabel = `${mbps.toFixed(1)} / ${cap} Mbps (${util.toFixed(1)}%)`;
+      const lblW = bwLabel.length * 5.2;
+      const labelBg = util >= 90 ? '#3a0d0d' : (util >= 85 ? '#2a1500' : (util >= 70 ? '#2a1f00' : '#0a2a1a'));
+      html += `<rect x="${mx - lblW/2}" y="${my-9}" width="${lblW}" height="14" rx="7" fill="${labelBg}" opacity="0.92"/>`;
+      html += `<text x="${mx}" y="${my+3}" text-anchor="middle" fill="${col}" font-size="8" font-weight="700">${bwLabel}</text>`;
+    } else {
+      html += `<text x="${mx}" y="${my+3}" text-anchor="middle" fill="${col}" font-size="8" opacity="0.5">idle</text>`;
+    }
+
+    // Animated traffic dots
+    if (mbps > 0.1) {
+      const dots = Math.min(6, Math.ceil(mbps / 3));
+      for (let i = 0; i < dots; i++) {
+        const t = ((topoAnimFrame * 2.5 + i * (100 / dots)) % 100) / 100;
+        const dx = s.x + (d.x - s.x) * t, dy = s.y + (d.y - s.y) * t;
+        html += `<circle cx="${dx}" cy="${dy}" r="3.5" fill="${col}" opacity="0.85" filter="url(#glow)"/>`;
+      }
+    }
+  });
+
+  // ── Host-to-switch links — per-device traffic labels ON link ───
+  HOSTS.forEach(h => {
+    const sw = swMap[h.sw]; if (!sw) return;
+    const hp = hostPos[h.id]; if (!hp) return;
+    const telemetry = hostTelemetry(h);
+    const bw = telemetry.current_mbps || 0;
+    const capacity = telemetry.capacity_mbps || 100;
+    const devUtil = telemetry.utilization_percent || 0;
+    const devState = telemetry.threshold_state || '';
+    const labelText = telemetry.display_label || telemetry.traffic_type || 'Active';
+    const activeLink = telemetry.active || bw > 0.05;
+
+    // 4-state color from utilization % (100 Mbps port capacity)
+    const lColor  = activeLink ? (telemetry.link_stroke || linkColor(bw, capacity, devState)) : '#1a2a40';
+    const lWidth  = activeLink ? Math.min(7.5, Math.max(1.5, 1.5 + bw * 0.12)) : 1;
+
+    // Link line
+    html += `<line x1="${sw.x}" y1="${sw.y+18}" x2="${hp.x}" y2="${hp.y-14}" stroke="${lColor}" stroke-width="${lWidth}" stroke-dasharray="${activeLink?'none':'3,4'}" opacity="${activeLink?0.78:0.3}"/>`;
+
+    // Per-device label ON the link midpoint — Req §2.1
+    // Format: "2.4 / 100 Mbps" and below "(2.4%) • E-learning"
+    if (activeLink && bw > 0.05) {
+      const lmx = (sw.x + hp.x) / 2;
+      const lmy = (sw.y + 18 + hp.y - 14) / 2;
+      const trafficLabel = labelText.length > 14 ? `${labelText.substring(0, 14)}…` : labelText;
+      const line1 = `${bw.toFixed(1)} / ${capacity.toFixed(0)} Mbps`;
+      const line2 = `(${devUtil.toFixed(1)}%) • ${trafficLabel}`;
+      const lblBg = devUtil >= 90 ? '#3a0d0d' : (devUtil >= 85 ? '#2a1200' : (devUtil >= 70 ? '#2a1f00' : '#0a1a12'));
+      const lblW1 = line1.length * 5.5 + 8;
+      const lblW2 = line2.length * 4.8 + 8;
+      const lblW  = Math.max(lblW1, lblW2);
+      html += `<rect x="${lmx - lblW/2}" y="${lmy-14}" width="${lblW}" height="22" rx="5" fill="${lblBg}" opacity="0.88"/>`;
+      html += `<text x="${lmx}" y="${lmy-4}" text-anchor="middle" fill="${lColor}" font-size="7.5" font-weight="700">${line1}</text>`;
+      html += `<text x="${lmx}" y="${lmy+6}" text-anchor="middle" fill="${lColor}" font-size="7" opacity="0.85">${line2}</text>`;
+    }
+
+    // Animated traffic dot
+    if (activeLink && bw > 0.5) {
+      const t = ((topoAnimFrame * 4 + h.id.length * 13) % 100) / 100;
+      const dx = sw.x + (hp.x - sw.x) * t, dy = (sw.y + 18) + (hp.y - 14 - sw.y - 18) * t;
+      html += `<circle cx="${dx}" cy="${dy}" r="2.5" fill="${lColor}" opacity="0.9"/>`;
+    }
+  });
+
+  // ── Switch nodes ───────────────────────────────────────────────
+  SWITCHES.forEach(n => {
+    const colors = {core:'#3b82f6', dist:'#a855f7', access:'#10d9a0'};
+    const c = colors[n.type] || '#64748b';
+    const r = n.type === 'core' ? 26 : (n.type === 'dist' ? 20 : 17);
+    const isCore = n.type === 'core';
+    // Outer glow
+    html += `<circle cx="${n.x}" cy="${n.y}" r="${r+8}" fill="none" stroke="${c}" stroke-width="1" opacity="0.15"/>`;
+    // Main circle
+    html += `<circle cx="${n.x}" cy="${n.y}" r="${r}" fill="${c}" fill-opacity="0.10" stroke="${c}" stroke-width="2"/>`;
+    // Icon
+    const icon = n.type === 'core' ? '⬡' : (n.type === 'dist' ? '◈' : '◆');
+    html += `<text x="${n.x}" y="${n.y+5}" text-anchor="middle" fill="${c}" font-size="${r-4}" font-weight="800">${icon}</text>`;
+    // Label
+    html += `<text x="${n.x}" y="${n.y+r+15}" text-anchor="middle" fill="#cbd5e1" font-size="${isCore?10.5:9.5}" font-weight="700">${n.label}</text>`;
+    html += `<text x="${n.x}" y="${n.y+r+26}" text-anchor="middle" fill="#475569" font-size="8">${n.sublabel}</text>`;
+  });
+
+  // ── Host nodes (clickable PCs) ─────────────────────────────────
+  HOSTS.forEach(h => {
+    const hp = hostPos[h.id]; if (!hp) return;
+    const isServer = h.sw === 'as2';
+    const r = isServer ? 11 : 10;
+    const zoneColor = isServer ? '#06b6d4' : (h.sw==='as4'?'#f59e0b':(h.sw==='as1'?'#10d9a0':'#a855f7'));
+    const telemetry = hostTelemetry(h);
+    const actDef = telemetry.activity_def || ACTIVITY_DEFS.idle;
+    const bw = telemetry.current_mbps || 0;
+    const isActive = telemetry.active;
+    const activityBadge = telemetry.display_label || telemetry.traffic_type || 'Active';
+
+    // Glow/pulse ring when active
+    if (isActive) {
+      const pulseR = r + 6 + Math.sin(topoAnimFrame * 0.25) * 2;
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${pulseR}" fill="${telemetry.node_color}" opacity="0.12" stroke="${telemetry.node_color}" stroke-width="0.8"/>`;
+    }
+    // Base ring
+    const ringColor = isActive ? telemetry.node_color : zoneColor;
+    html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r+2}" fill="none" stroke="${ringColor}" stroke-width="1.5" opacity="${isActive?0.6:0.2}"/>`;
+
+    if (h.clickable) {
+      // Clickable PC node — shows pointer cursor and hover effect
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r}" fill="${isActive?telemetry.node_color:zoneColor}" fill-opacity="${isActive?0.25:0.12}" stroke="${ringColor}" stroke-width="2" style="cursor:pointer" onclick="openPcBrowser('${h.id}')"/>`;
+      html += `<text x="${hp.x}" y="${hp.y+5}" text-anchor="middle" font-size="${isServer?13:11}" style="cursor:pointer;pointer-events:none">${telemetry.display_icon}</text>`;
+      // Activity badge above node
+      if (isActive) {
+        html += `<rect x="${hp.x-20}" y="${hp.y-r-16}" width="40" height="12" rx="6" fill="${telemetry.node_color}" opacity="0.9"/>`;
+        html += `<text x="${hp.x}" y="${hp.y-r-7}" text-anchor="middle" fill="#fff" font-size="7.5" font-weight="700">${activityBadge.substring(0,10)}</text>`;
+      }
+      // Label + IP
+      html += `<text x="${hp.x}" y="${hp.y+r+13}" text-anchor="middle" fill="${isActive?telemetry.node_color:'#94a3b8'}" font-size="9" font-weight="700" style="cursor:pointer" onclick="openPcBrowser('${h.id}')">${h.label}</text>`;
+      html += `<text x="${hp.x}" y="${hp.y+r+23}" text-anchor="middle" fill="#475569" font-size="7.5">${h.ip}</text>`;
+      // Mbps label when active
+      if (isActive && bw > 0.1) {
+        html += `<text x="${hp.x}" y="${hp.y+r+34}" text-anchor="middle" fill="${telemetry.node_color}" font-size="7.5" font-weight="700">${bw.toFixed(1)}M</text>`;
+      }
+      // Hover overlay (transparent click target)
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r+6}" fill="transparent" style="cursor:pointer" onclick="openPcBrowser('${h.id}')" title="${h.label} — Click to open"/>`;
+    } else {
+      // Server node (not clickable)
+      html += `<circle cx="${hp.x}" cy="${hp.y}" r="${r}" fill="${ringColor}" fill-opacity="${isActive?0.2:0.12}" stroke="${ringColor}" stroke-width="1.5"/>`;
+      html += `<text x="${hp.x}" y="${hp.y+5}" text-anchor="middle" font-size="12">${h.icon}</text>`;
+      if (isActive) {
+        html += `<rect x="${hp.x-20}" y="${hp.y-r-16}" width="40" height="12" rx="6" fill="${ringColor}" opacity="0.88"/>`;
+        html += `<text x="${hp.x}" y="${hp.y-r-7}" text-anchor="middle" fill="#fff" font-size="7.5" font-weight="700">${activityBadge.substring(0,10)}</text>`;
+      }
+      html += `<text x="${hp.x}" y="${hp.y+r+13}" text-anchor="middle" fill="${isActive?ringColor:'#64748b'}" font-size="8.5" font-weight="600">${h.label}</text>`;
+      html += `<text x="${hp.x}" y="${hp.y+r+23}" text-anchor="middle" fill="#475569" font-size="7.5">${h.ip}</text>`;
+      if (isActive && bw > 0.05) {
+        html += `<text x="${hp.x}" y="${hp.y+r+34}" text-anchor="middle" fill="${ringColor}" font-size="7.5" font-weight="700">${bw.toFixed(1)}M</text>`;
+      }
+    }
+  });
+
+  // ── Zone labels ────────────────────────────────────────────────
+  const zoneLabels = [
+    {x:112, y:636, label:'VLAN 10 — Staff LAN',    color:'#10d9a0'},
+    {x:395, y:636, label:'VLAN 20 — Server Zone',  color:'#06b6d4'},
+    {x:653, y:636, label:'VLAN 30 — IT Lab',        color:'#a855f7'},
+    {x:970, y:636, label:'VLAN 40 — Student WiFi',  color:'#f59e0b'},
+  ];
+  zoneLabels.forEach(z => {
+    html += `<rect x="${z.x-72}" y="${z.y-9}" width="144" height="16" rx="8" fill="${z.color}" opacity="0.06" stroke="${z.color}" stroke-width="0.8" opacity="0.25"/>`;
+    html += `<text x="${z.x}" y="${z.y+4}" text-anchor="middle" fill="${z.color}" font-size="9" font-weight="700">${z.label}</text>`;
+  });
+
+  svg.innerHTML = svg.querySelector('defs').outerHTML + html;
+}
+
+// ─── SINGLE CONSOLIDATED POLL LOOP ──────────────────────────────
+// Fetches all data in one parallel request batch every 2 s.
+// Topology animation runs at 800 ms but only redraws (no fetch).
+
+function refresh() {
+  Promise.all([
+    fetch('/api/metrics').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/ml_action').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/pc_activities').then(r=>r.json()).catch(()=>({})),
+    fetch('/api/timetable').then(r=>r.json()).catch(()=>({})),
+  ]).then(([m, ml, pc, tt]) => {
+    _metricsCache = m || {};
+    if (pc && pc.pcs) renderPcGrid(pc);
+
+    // ── Topology + zone traffic cards ──
+    drawTopology(m);
+    const zm = m.zone_metrics||{};
+    const zMap = {staff_lan:'Staff', server_zone:'Server', it_lab:'Lab', student_wifi:'Wifi', external_vm:'External'};
+    for (const [zk, label] of Object.entries(zMap)) {
+      const d = zm[zk]||{};
+      const el = $(`#tc${label}Val`); if (el) el.textContent=`${(d.throughput_mbps||0).toFixed(2)} Mbps`;
+      const sub = $(`#tc${label}Sub`);
+      if (sub) { const u=d.max_utilization_pct||0; sub.textContent=`Util: ${u.toFixed(1)}% — ${d.congested?'⚠ CONGESTED':'Normal'}`; }
+    }
+    const hostChips={Staff:[],Server:[],Lab:[],Wifi:[],External:[]};
+    HOSTS.forEach(h=>{
+      const chip=`<span class="host-chip">${h.icon} ${h.label} (${h.ip})</span>`;
+      if(h.sw==='as1')hostChips.Staff.push(chip); else if(h.sw==='as2')hostChips.Server.push(chip);
+      else if(h.sw==='as3')hostChips.Lab.push(chip); else if(h.sw==='as4')hostChips.Wifi.push(chip);
+      else if(h.sw==='ovs_ext')hostChips.External.push(chip);
+    });
+    for (const [k,chips] of Object.entries(hostChips)) { const el=$(`#tc${k}Hosts`); if(el) el.innerHTML=chips.join(''); }
+
+    // ── Overview KPIs ──
+    const sw = m.connected_switches||[];
+    $('#kvCtrl').textContent = sw.length>0?`${sw.length} Switches`:'Offline';
+    $('#ksCtrl').textContent  = sw.length>0?'Connected & healthy':'Waiting...';
+    let totalTput=0, zoneHtml='';
+    for (const [z,d] of Object.entries(zm)) {
+      totalTput += d.throughput_mbps||0;
+      const util=d.max_utilization_pct||0, cls=d.congested?'r':(util>50?'a':'g');
+      const lat  = d.latency_ms!==undefined ? d.latency_ms.toFixed(1)+' ms' : '—';
+      const loss = d.loss_pct!==undefined   ? d.loss_pct.toFixed(2)+'%'     : '—';
+      const lossCls = (d.loss_pct||0)>1?'r':((d.loss_pct||0)>0.1?'a':'g');
+      zoneHtml+=`<tr>
+        <td style="font-weight:600">${z.replace(/_/g,' ')}</td>
+        <td>${(d.throughput_mbps||0).toFixed(2)} Mbps</td>
+        <td><span class="stat-v ${cls}">${util.toFixed(1)}%</span></td>
+        <td><span class="stat-v ${util>60?'a':'g'}">${lat}</span></td>
+        <td><span class="stat-v ${lossCls}">${loss}</span></td>
+        <td>${d.congested?'⚠ Congested':(d.predicted_congestion?'⚡ Predicted':util>50?'Elevated':'Normal')}</td></tr>`;
+    }
+    $('#zoneTable').innerHTML = zoneHtml||'<tr><td colspan="6" style="color:var(--dim)">No zone data</td></tr>';
+    $('#kvTput').textContent = totalTput.toFixed(1);
+
+    // ── Analytics ──
+    const congCount = m.congested_ports_count||0;
+    $('#anTput').textContent=totalTput.toFixed(1); $('#anCong').textContent=congCount; $('#anFlows').textContent=m.flow_count||'—';
+    let zoneTxt='', totalLat=0, latCount=0;
+    for(const[z,d]of Object.entries(zm)){
+      const lat=d.latency_ms||0, loss=d.loss_pct||0, jitter=d.jitter_ms||0;
+      totalLat+=lat; latCount++;
+      zoneTxt+=`── ${z.toUpperCase().replace(/_/g,' ')} ──\n`;
+      zoneTxt+=`  Throughput:  ${(d.throughput_mbps||0).toFixed(2)} Mbps\n`;
+      zoneTxt+=`  Utilization: ${(d.max_utilization_pct||0).toFixed(1)}%  (EMA: ${(d.util_ema||0).toFixed(1)}%)\n`;
+      zoneTxt+=`  Latency:     ${lat.toFixed(1)} ms  |  Jitter: ${jitter.toFixed(2)} ms\n`;
+      zoneTxt+=`  Packet Loss: ${loss.toFixed(2)}%\n`;
+      zoneTxt+=`  PPS:         ${(d.pps||0).toFixed(0)} pkt/s\n`;
+      zoneTxt+=`  Status:      ${d.congested?'⚠ CONGESTED':d.predicted_congestion?'⚡ PREDICTED':loss>1?'⚠ HIGH LOSS':'✓ Normal'}\n\n`;
+    }
+    $('#anZone').textContent = zoneTxt||'No zone data';
+    const avgLat = latCount ? totalLat/latCount : 5;
+    $('#anLat').textContent = avgLat.toFixed(1);
+
+    // ── Events / Logs ──
+    const evts=(m.events||[]).slice(-15).reverse();
+    if(evts.length>0){
+      $('#alertPane').textContent=evts.map(e=>`[${new Date(e.ts*1000).toLocaleTimeString()}] ${e.event}`).join('\n');
+      $('#evtLog').textContent=evts.map(e=>JSON.stringify(e,null,1)).join('\n---\n');
+    }
+
+    // ── Security ──
+    $('#secStatus').textContent=m.ddos_active?'⚠ ALERT':'✓ Secure';
+    $('#secBlocked').textContent=m.security_blocked||0;
+    $('#secDdos').textContent=m.ddos_active?'ACTIVE':'Clear';
+
+    // ── Link bars ──
+    const ps=m.switch_port_stats||{}; let barHtml='';
+    for(const[dpid,ports]of Object.entries(ps)){for(const[port,stats]of Object.entries(ports)){
+      const u=stats.util_pct||0, col=u>80?'var(--red)':(u>50?'var(--amber)':'var(--green)');
+      barHtml+=`<div class="bar-wrap"><div class="bar-label"><span>sw${dpid}:p${port}</span><span>${u.toFixed(1)}% (${(stats.mbps||0).toFixed(2)} Mbps)</span></div><div class="bar"><div class="bar-fill" style="width:${Math.min(100,u)}%;background:${col}"></div></div></div>`;
+    }}
+    $('#linkBars').innerHTML=barHtml||'<span style="color:var(--dim);font-size:12px">No port data</span>';
+
+    // ── Timetable ──
+    if(tt && tt.period) {
+      $('#ttPane').textContent=`Period: ${tt.period}\nDay: ${tt.day||'—'} Time: ${tt.time||'—'}\nExam Mode: ${tt.exam_flag?'ACTIVE':'inactive'}\nActive Slots: ${tt.slot_count||0}`;
+    } else if(tt && tt.current_period) {
+      $('#ttPane').textContent=`Period: ${tt.current_period}\nDay: ${tt.day||'—'} Time: ${tt.time||'—'}\nExam Mode: ${tt.exam_flag?'ACTIVE':'inactive'}`;
+    } else {
+      $('#ttPane').textContent='No timetable data';
+    }
+
+    // ── ML / DQN ──
+    const act = ml.action||ml.dqn?.action_name;
+    if(act){
+      $('#kvPolicy').textContent=(act||'').replace(/_/g,' ');
+      $('#ksPolicy').textContent=`ε=${(ml.epsilon||0).toFixed(3)} reward:${(ml.reward||0).toFixed(2)}`;
+      const rew = ml.reward||0;
+      const rewSign = rew>=0?'+':'';
+      const topQ = ml.q_values ? ml.q_values.indexOf(Math.max(...ml.q_values)) : ml.action_index;
+      const ACTIONS=['normal_mode','throttle_wifi_30pct','throttle_wifi_70pct','throttle_wifi_90pct','boost_staff_lan','boost_server_zone','boost_lab_zone','exam_mode','peak_hour_mode','throttle_wifi_boost_staff','throttle_wifi_boost_server','throttle_social_boost_academic','emergency_staff_protection','emergency_server_protection','security_isolation_wifi','load_balance_ds1_ds2'];
+      const selMode = (ml.epsilon||0)>0.15?'ε-EXPLORE (random)':'GREEDY (best Q)';
+
+      // ── Header ──
+      let txt=`Action : ${act}\n`;
+      txt+=`Reward : ${rewSign}${rew.toFixed(3)}  [fn: ${ml.xai?.reward_fn||'linear'}]\n`;
+      txt+=`Episode: ${ml.episode||'—'} | ε: ${(ml.epsilon||0).toFixed(4)} | ${selMode}\n`;
+
+      // ── Per-zone SLO reward breakdown (from XAI block) ──
+      const rb = ml.xai?.reward_breakdown;
+      if(rb){
+        txt+=`\nSLO Reward Breakdown (nonlinear exponential):\n`;
+        const ZW={'staff_lan':'Staff LAN (×0.40)','server_zone':'Server   (×0.30)','it_lab':'IT Lab   (×0.15)','student_wifi':'WiFi     (×0.10)'};
+        for(const[z,zl]of Object.entries(ZW)){
+          const zd=rb[z]||{}; const met=zd.slo_met;
+          const util=(zd.util||0).toFixed(1);
+          const lat=(zm[z]?.latency_ms||0).toFixed(1);
+          const loss=(zm[z]?.loss_pct||0).toFixed(2);
+          txt+=`  ${zl}: ${util}% util | ${lat}ms lat | ${loss}% loss  ${met?'✓ SLO met':'✗ SLO VIOLATED'}\n`;
+        }
+        const secPen=ml.xai?.security_penalty||0;
+        if(secPen<0) txt+=`  Security penalty: ${secPen.toFixed(2)}\n`;
+        txt+=`  ─────────────────────────────────────────\n`;
+        txt+=`  Total reward: ${rewSign}${rew.toFixed(3)}\n`;
+      } else {
+        // Fallback for old stub output
+        const congPen=Object.values(zm).filter(d=>d.congested).length;
+        txt+=`\nReward Breakdown:\n`;
+        txt+=`  Util change: ${rewSign}${(rew*0.7).toFixed(3)}\n`;
+        txt+=`  Congestion:  -${(congPen*0.3).toFixed(3)} (${congPen} zones)\n`;
+        if(ml.zone_utilization){for(const[k,v]of Object.entries(ml.zone_utilization)){const z=zm[k]||{};txt+=`  ${k}: ${v.toFixed(1)}% | lat=${(z.latency_ms||0).toFixed(1)}ms\n`;}}
+      }
+
+      // ── XAI Feature Attribution ──
+      const xf = ml.xai?.top_features;
+      if(xf&&xf.length){
+        txt+=`\nFeature Attribution (top 3 drivers):\n`;
+        xf.forEach((f,i)=>{
+          const bar='█'.repeat(Math.round((f.impact||0)*10)).padEnd(10,'░');
+          txt+=`  ${i+1}. ${(f.feature||'').padEnd(16)} ${bar} val=${f.value} impact=${f.impact.toFixed(3)}\n`;
+        });
+      }
+
+      // ── Safety Rail indicator ──
+      const sr=m.safety_rail;
+      if(sr&&sr.enforced) txt+=`\n⚠ Safety Rail: "${(sr.original||'').replace(/_/g,' ')}" → "${(sr.enforced||'').replace(/_/g,' ')}"\n`;
+
+      // ── Top Q-values ──
+      if(ml.q_values&&ml.q_values.length){
+        txt+=`\nTop Q-values:\n`;
+        const sorted=[...ml.q_values.map((v,i)=>({v,i,a:ACTIONS[i]||i}))].sort((a,b)=>b.v-a.v).slice(0,5);
+        sorted.forEach(x=>{txt+=`  [${x.i}] ${(x.a+'').replace(/_/g,' ')}: ${x.v.toFixed(3)}${x.i===topQ?' ← chosen':''}\n`;});
+      }
+
+      $('#aiPane').textContent=txt; $('#anDqn').textContent=txt;
+    }
+    // ── PC Simulator ──
+    if(pcbCurrentHost && pc?.pcs?.[pcbCurrentHost]) updatePcbStatus(pc.pcs[pcbCurrentHost]);
+
+  }).catch(()=>{ $('#kvCtrl').textContent='Offline'; });
+}
+
+function initRealtime() {
+  if (realtimeBooted) return;
+  if (typeof io !== 'function') {
+    console.warn('Socket.IO client unavailable; using polling only.');
+    return;
+  }
+
+  realtimeBooted = true;
+  socket = io();
+  socket.on('metrics_update', m => { _metricsCache = m || {}; });
+  socket.on('pc_activities_update', data => { if (data && data.pcs) renderPcGrid(data); });
+  socket.on('alerts_update', data => { if (data) applyAlertPayload(data); });
+  socket.on('connect_error', err => {
+    console.warn('Realtime channel unavailable; using polling only.', err?.message || err);
+  });
+}
+
+// ─── STARTUP (moved to bottom — ACTIVITY_DEFS and pcState must be declared first) ───
+
+// ═══════════════════════════════════════════════════════════════
+//  PC SIMULATOR
+// ═══════════════════════════════════════════════════════════════
+
+const ACTIVITY_DEFS = {
+  idle:             {label:'Idle',             icon:'●', color:'#64748b', pri:5, desc:'No traffic', bw:0},
+  exam:             {label:'Online Exam',      icon:'E', color:'#ef4444', pri:1, desc:'Highest-priority assessment traffic', bw:18},
+  online_exam:      {label:'Online Exam',      icon:'E', color:'#ef4444', pri:1, desc:'Highest-priority assessment traffic', bw:18},
+  video_conf:       {label:'Google Meet',      icon:'V', color:'#3b82f6', pri:1, desc:'Real-time conferencing', bw:16},
+  google_meet:      {label:'Google Meet',      icon:'V', color:'#3b82f6', pri:1, desc:'Real-time conferencing', bw:16},
+  voip:             {label:'VoIP',             icon:'☎', color:'#2563eb', pri:1, desc:'Latency-sensitive voice', bw:6},
+  elearning:        {label:'E-learning',       icon:'L', color:'#10b981', pri:2, desc:'Learning platform / LMS access', bw:18},
+  online_class:     {label:'Online Class',     icon:'C', color:'#14b8a6', pri:2, desc:'Live academic session', bw:20},
+  mis:              {label:'MIS Access',       icon:'I', color:'#0ea5e9', pri:2, desc:'Administrative MIS traffic', bw:14},
+  siad:             {label:'SIAD Access',      icon:'S', color:'#22c55e', pri:2, desc:'Student administration workflow', bw:14},
+  rp_system:        {label:'RP System',        icon:'R', color:'#84cc16', pri:2, desc:'Registration/reporting workflow', bw:12},
+  authentication:   {label:'Authentication',   icon:'A', color:'#38bdf8', pri:1, desc:'Identity and access control', bw:1},
+  dns_query:        {label:'DNS',              icon:'D', color:'#60a5fa', pri:1, desc:'Name-resolution traffic', bw:0.4},
+  dhcp_sync:        {label:'DHCP',             icon:'H', color:'#93c5fd', pri:1, desc:'Address-assignment traffic', bw:0.3},
+  research:         {label:'Research',         icon:'R', color:'#8b5cf6', pri:3, desc:'Academic research workload', bw:22},
+  web_browsing:     {label:'Web Browsing',     icon:'W', color:'#7c3aed', pri:3, desc:'Normal academic browsing', bw:8},
+  cloud_storage:    {label:'Cloud Storage',    icon:'☁', color:'#c084fc', pri:3, desc:'Medium-priority sync traffic', bw:28},
+  study_download:   {label:'Study Download',   icon:'B', color:'#a855f7', pri:3, desc:'Academic bulk download', bw:40},
+  video_streaming:  {label:'Streaming',        icon:'S', color:'#f59e0b', pri:4, desc:'Low-priority media streaming', bw:80},
+  file_download:    {label:'Large Download',   icon:'D', color:'#f97316', pri:4, desc:'Bulk non-academic download', bw:92},
+  social_media:     {label:'Social Media',     icon:'M', color:'#06b6d4', pri:5, desc:'Best-effort social traffic', bw:12},
+  gaming:           {label:'Gaming',           icon:'G', color:'#ec4899', pri:5, desc:'Entertainment traffic', bw:38},
+  ddos_attack:      {label:'DDoS (Security)',  icon:'!', color:'#dc2626', pri:0, desc:'Security test scenario', bw:95},
+  port_scan:        {label:'Port Scan',        icon:'S', color:'#f97316', pri:0, desc:'TCP SYN port scan', bw:0.5},
+  network_sweep:    {label:'Network Sweep',    icon:'W', color:'#fb923c', pri:0, desc:'ICMP ping sweep', bw:0.1},
+};
+const PRI_LABELS = {0:'ATTACK', 1:'CRITICAL', 2:'HIGH', 3:'MEDIUM', 4:'LOW', 5:'BEST-EFFORT'};
+
+const PC_DEFS = [
+  // Staff LAN — 6 PCs
+  {id:'h_staff1', label:'Staff-PC1', ip:'10.10.0.1', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff2', label:'Staff-PC2', ip:'10.10.0.2', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff3', label:'Staff-PC3', ip:'10.10.0.3', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff4', label:'Staff-PC4', ip:'10.10.0.4', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff5', label:'Staff-PC5', ip:'10.10.0.5', zone:'staff_lan',    role:'staff'},
+  {id:'h_staff6', label:'Staff-PC6', ip:'10.10.0.6', zone:'staff_lan',    role:'staff'},
+  // IT Lab — 4 PCs
+  {id:'h_lab1',   label:'Lab-PC1',   ip:'10.30.0.1', zone:'it_lab',       role:'student'},
+  {id:'h_lab2',   label:'Lab-PC2',   ip:'10.30.0.2', zone:'it_lab',       role:'student'},
+  {id:'h_lab3',   label:'Lab-PC3',   ip:'10.30.0.3', zone:'it_lab',       role:'student'},
+  {id:'h_lab4',   label:'Lab-PC4',   ip:'10.30.0.4', zone:'it_lab',       role:'student'},
+  // Student WiFi — 10 devices
+  {id:'h_wifi1',  label:'Student-PC1', ip:'10.40.0.1', zone:'student_wifi', role:'student'},
+  {id:'h_wifi2',  label:'Student-PC2', ip:'10.40.0.2', zone:'student_wifi', role:'student'},
+  {id:'h_wifi3',  label:'Student-PC3', ip:'10.40.0.3', zone:'student_wifi', role:'student'},
+  {id:'h_wifi4',  label:'Student-PC4', ip:'10.40.0.4', zone:'student_wifi', role:'student'},
+  {id:'h_wifi5',  label:'Student-PC5', ip:'10.40.0.5', zone:'student_wifi', role:'student'},
+  {id:'h_wifi6',  label:'Student-PC6', ip:'10.40.0.6', zone:'student_wifi', role:'student'},
+  {id:'h_wifi7',  label:'Student-PC7', ip:'10.40.0.7', zone:'student_wifi', role:'student'},
+  {id:'h_wifi8',  label:'Student-PC8', ip:'10.40.0.8', zone:'student_wifi', role:'student'},
+  {id:'h_wifi9',  label:'Student-PC9', ip:'10.40.0.9', zone:'student_wifi', role:'student'},
+  {id:'h_wifi10', label:'Student-PC10', ip:'10.40.0.10', zone:'student_wifi', role:'student'},
+  {id:'ext_win10', label:'Windows 10 VM', ip:'10.50.0.10', zone:'external_vm', role:'external_vm'},
+];
+
+function allPcDefs() {
+  const defs = new Map(PC_DEFS.map(pc => [pc.id, {...pc}]));
+  for (const [host, info] of Object.entries(pcState || {})) {
+    const existing = defs.get(host) || {};
+    defs.set(host, {
+      id: host,
+      label: info.label || existing.label || host,
+      ip: info.ip || existing.ip || '',
+      zone: info.zone || info.zone_key || existing.zone || '',
+      role: info.role || existing.role || (info.external ? 'external_vm' : 'student'),
+    });
+  }
+  return [...defs.values()];
+}
+
+const DEMO_SCENARIOS = {
+  canonical: [
+    {host:'h_staff1', activity:'mis'},
+    {host:'h_staff2', activity:'video_conf'},
+    {host:'h_lab1',   activity:'elearning'},
+    {host:'h_lab2',   activity:'research'},
+    {host:'h_wifi1',  activity:'web_browsing'},
+    {host:'h_wifi2',  activity:'social_media'},
+  ],
+  staff_heavy: [
+    {host:'h_staff1', activity:'mis'},
+    {host:'h_staff2', activity:'video_conf'},
+    {host:'h_staff3', activity:'rp_system'},
+    {host:'h_staff4', activity:'cloud_storage'},
+    {host:'h_staff5', activity:'study_download'},
+    {host:'h_lab1',   activity:'elearning'},
+  ],
+  security_test: [
+    {host:'h_staff1', activity:'exam'},
+    {host:'h_wifi3',  activity:'ddos_attack'},
+    {host:'h_wifi4',  activity:'ddos_attack'},
+    {host:'h_staff2', activity:'video_conf'},
+    {host:'h_lab1',   activity:'elearning'},
+  ],
+  congestion: [
+    {host:'h_wifi1',  activity:'file_download'},
+    {host:'h_wifi2',  activity:'file_download'},
+    {host:'h_wifi3',  activity:'video_streaming'},
+    {host:'h_wifi4',  activity:'video_streaming'},
+    {host:'h_wifi5',  activity:'gaming'},
+    {host:'h_wifi6',  activity:'file_download'},
+    {host:'h_wifi7',  activity:'video_streaming'},
+    {host:'h_wifi8',  activity:'social_media'},
+    {host:'h_wifi9',  activity:'elearning'},
+    {host:'h_wifi10', activity:'google_meet'},
+    {host:'h_lab1',   activity:'research'},
+    {host:'h_lab2',   activity:'study_download'},
+  ],
+};
+
+// State
+let pcState = {};               // {hostId: {activity, traffic_mbps, priority, since_ts, ...}}
+let selectedPc = null;          // currently selected host id
+let activeZoneFilter = 'all';
+let lastBaseline = null;
+let proactiveState = {};
+
+// ── Render PC grid ──────────────────────────────────────────────
+
+function renderPcGrid(data) {
+  if (!data || !data.pcs) return;
+  pcState = data.pcs;
+
+  // Update KPIs
+  let activeCt = 0, totalBw = 0, highPriCt = 0;
+  for (const [host, info] of Object.entries(pcState)) {
+    if (info.activity !== 'idle') activeCt++;
+    totalBw += info.current_mbps || info.traffic_mbps || 0;
+    if (info.priority <= 2 && info.activity !== 'idle') highPriCt++;
+  }
+  $('#pcKpiActive').textContent = activeCt;
+  $('#pcKpiTotal').textContent = totalBw.toFixed(1);
+  $('#pcKpiHighPri').textContent = highPriCt;
+
+  // Baseline KPI
+  if (data.baseline && data.baseline.captured_ts) {
+    const ago = Math.round((Date.now()/1000 - data.baseline.captured_ts) / 60);
+    $('#pcKpiBaseline').textContent = 'Captured';
+    $('#pcKpiBaselineSub').textContent = `${ago}m ago`;
+    lastBaseline = data.baseline;
+    renderBaselineComparison(data.baseline);
+  }
+
+  // Render cards
+  const grid = $('#pcGrid');
+  const filtered = allPcDefs().filter(pc =>
+    activeZoneFilter === 'all' || pc.zone === activeZoneFilter
+  );
+
+  let html = '';
+  for (const pc of filtered) {
+    const info = pcState[pc.id] || {};
+    const act = info.activity || 'idle';
+    const def = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+    const bw = info.current_mbps || info.traffic_mbps || 0;
+    const maxBw = def.bw || 1;
+    const fillPct = Math.min(100, (bw / maxBw) * 100).toFixed(0);
+    const isSelected = pc.id === selectedPc ? ' selected' : '';
+    const isActive = act !== 'idle' ? ' active-traffic' : '';
+
+    html += `<div class="pc-card${isSelected}${isActive}" data-host="${pc.id}"
+      style="--c:${def.color}" onclick="selectPc('${pc.id}')">
+      <div class="pc-icon" style="--c:${def.color}">${def.icon}</div>
+      <div class="pc-name">${pc.label}</div>
+      <div class="pc-ip">${pc.ip}</div>
+      <div class="pc-activity-badge" style="--c:${def.color}">${def.label}</div>
+      <div class="pc-priority" style="color:${def.color}">${PRI_LABELS[def.pri]}</div>
+      <div class="pc-traffic-bar"><div class="pc-traffic-fill" style="width:${fillPct}%;background:${def.color}"></div></div>
+      <div class="pc-bw">${act !== 'idle' ? bw.toFixed(1)+' / '+maxBw+' Mbps' : '—'}</div>
+    </div>`;
+  }
+  grid.innerHTML = html;
+
+  // Re-attach click listeners (already set via onclick attribute)
+  // Update config panel if a PC is selected
+  if (selectedPc && pcState[selectedPc]) {
+    updateConfigPanel(selectedPc, pcState[selectedPc]);
+  }
+}
+
+function selectPc(hostId) {
+  selectedPc = hostId;
+  const info = pcState[hostId] || {};
+  const pcDef = allPcDefs().find(p => p.id === hostId) || {};
+
+  // Re-render grid to update selection highlight
+  renderPcGrid({pcs: pcState, baseline: lastBaseline ? {captured_ts: lastBaseline.captured_ts} : {}});
+
+  updateConfigPanel(hostId, info, pcDef);
+}
+
+function updateConfigPanel(hostId, info, pcDef) {
+  pcDef = pcDef || allPcDefs().find(p => p.id === hostId) || {};
+  const act = info.activity || 'idle';
+  const def = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+
+  $('#cfgTitle').textContent = pcDef.label || hostId;
+  $('#cfgPcInfo').style.display = '';
+  $('#cfgPcMeta').textContent = `${pcDef.ip || ''} — ${(pcDef.zone || '').replace('_', ' ')} — ${pcDef.role || ''}`;
+  $('#cfgCurrentAct').textContent = def.label;
+  $('#cfgCurrentAct').style.setProperty('--c', def.color);
+  $('#cfgPriority').textContent = `P${def.pri}`;
+  $('#cfgPriority').style.setProperty('--c', def.color);
+
+  // Live stats
+  $('#cfgLiveStats').style.display = '';
+  $('#cfgLiveBw').textContent = act !== 'idle' ? `${(info.current_mbps||info.traffic_mbps||0).toFixed(2)} Mbps` : '—';
+  $('#cfgLivePri').textContent = PRI_LABELS[def.pri] || '—';
+  $('#cfgLiveDscp').textContent = info.dscp !== undefined ? info.dscp : '—';
+  if (info.since_ts) {
+    const secs = Math.round(Date.now()/1000 - info.since_ts);
+    $('#cfgLiveSince').textContent = secs < 60 ? `${secs}s ago` : `${Math.round(secs/60)}m ago`;
+  }
+  $('#cfgLiveZone').textContent = (info.zone||'—').replace(/_/g,' ');
+
+  // Activity buttons
+  let bHtml = '';
+  for (const [actId, actDef] of Object.entries(ACTIVITY_DEFS)) {
+    const isActive = actId === act ? ' active' : '';
+    bHtml += `<button class="act-btn${isActive}" data-host="${hostId}" data-act="${actId}"
+      style="--c:${actDef.color}" onclick="setActivity('${hostId}','${actId}')">
+      <div class="act-icon" style="--c:${actDef.color};background:${actDef.color}22">${actDef.icon}</div>
+      <div class="act-meta">
+        <span class="act-label">${actDef.label}</span>
+        <span class="act-desc">${actDef.desc}</span>
+      </div>
+      <span class="priority-badge" style="--c:${actDef.color};color:${actDef.color}">P${actDef.pri}</span>
+    </button>`;
+  }
+  $('#activityButtons').innerHTML = bHtml;
+}
+
+// ── Set Activity ────────────────────────────────────────────────
+
+function setActivity(host, activity) {
+  // Optimistic local update
+  if (pcState[host]) {
+    pcState[host].activity = activity;
+    const optimistic = activity === 'idle' ? 0 : (ACTIVITY_DEFS[activity]?.bw || 1) * 0.8;
+    pcState[host].traffic_mbps = optimistic;
+    pcState[host].current_mbps = optimistic;
+  }
+  renderPcGrid({pcs: pcState});
+  if (selectedPc === host) selectPc(host);
+
+  fetch('/api/set_activity', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({host, activity}),
+  }).then(r=>r.json()).then(d=>{
+    const log = `[${new Date().toLocaleTimeString()}] ${host} → ${activity}: ${d.ok ? 'OK' : d.error||d.note||'error'}`;
+    $('#simLog').textContent = log + '\n' + ($('#simLog').textContent||'').split('\n').slice(0,8).join('\n');
+  }).catch(e=>{
+    $('#simLog').textContent = `Error setting ${host}: ${e}`;
+  });
+}
+
+// ── Quick scenario ──────────────────────────────────────────────
+
+function applyScenario(name) {
+  const assignments = DEMO_SCENARIOS[name];
+  if (!assignments) return;
+
+  const log = `[${new Date().toLocaleTimeString()}] Applying scenario: ${name} (${assignments.length} PCs)...`;
+  $('#simLog').textContent = log;
+
+  fetch('/api/set_scenario', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({assignments}),
+  }).then(r=>r.json()).then(d=>{
+    const results = (d.results||[]).map(r=>r.host+':'+r.activity).join(', ');
+    $('#simLog').textContent = `[${new Date().toLocaleTimeString()}] ${name}: ${d.ok?'Applied':'Failed'} — ${results}`;
+    fetchPcActivities();
+  }).catch(e=>{ $('#simLog').textContent = `Scenario error: ${e}`; });
+}
+
+$$('.sq-btn').forEach(btn => {
+  btn.addEventListener('click', () => applyScenario(btn.dataset.scenario));
+});
+
+// ── Zone filter ─────────────────────────────────────────────────
+
+function filterZone(zone) {
+  activeZoneFilter = zone;
+  $$('#zoneAll,#zoneStaff,#zoneLab,#zoneWifi,#zoneExternal').forEach(b=>b.classList.remove('active'));
+  const ids = {all:'#zoneAll', staff_lan:'#zoneStaff', it_lab:'#zoneLab', student_wifi:'#zoneWifi', external_vm:'#zoneExternal'};
+  if (ids[zone]) $(ids[zone]).classList.add('active');
+  renderPcGrid({pcs: pcState});
+}
+
+// ── Baseline ────────────────────────────────────────────────────
+
+$('#btnCapture').addEventListener('click', () => {
+  $('#btnCapture').textContent = 'Capturing...';
+  fetch('/api/capture_baseline', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      $('#btnCapture').textContent = '◎ Capture Baseline';
+      $('#simLog').textContent = d.ok
+        ? `[${new Date().toLocaleTimeString()}] Baseline captured.`
+        : `Baseline error: ${d.error}`;
+      fetchPcActivities();
+    }).catch(e=>{
+      $('#btnCapture').textContent = '◎ Capture Baseline';
+      $('#simLog').textContent = 'Baseline error: '+e;
+    });
+});
+
+$('#btnResetAll').addEventListener('click', () => {
+  if (!confirm('Reset all 20 PCs to idle?')) return;
+  fetch('/api/reset_activities', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      $('#simLog').textContent = `[${new Date().toLocaleTimeString()}] All PCs reset to idle.`;
+      fetchPcActivities();
+    }).catch(e=>{ $('#simLog').textContent = 'Reset error: '+e; });
+});
+
+// ── Baseline comparison renderer ────────────────────────────────
+
+function renderBaselineComparison(baseline) {
+  const panel = $('#baselineCompare');
+  if (!baseline || !baseline.captured_ts) { return; }
+
+  const bm = baseline.metrics || {};
+  const zm = bm.zone_metrics || {};
+
+  let html = '';
+  let activeCt = 0, totalBw = 0;
+  for (const [h, info] of Object.entries(pcState)) {
+    if (info.activity !== 'idle') { activeCt++; totalBw += info.current_mbps||info.traffic_mbps||0; }
+  }
+
+  // Active PCs comparison
+  const blActive = Object.keys(baseline.activities||{}).length;
+  html += blRow('Active PCs', blActive, activeCt, '');
+
+  // Total throughput
+  const blBw = Object.values(zm).reduce((a,z)=>a+(z.throughput_mbps||0), 0);
+  html += blRow('Total Throughput', blBw.toFixed(1)+' Mbps', totalBw.toFixed(1)+' Mbps', '');
+
+  // Per-zone rows
+  for (const [zone, data] of Object.entries(zm)) {
+    const cur = Object.values(pcState)
+      .filter(p=>p.zone===zone && p.activity!=='idle')
+      .reduce((a,p)=>a+(p.current_mbps||p.traffic_mbps||0), 0);
+    html += blRow(zone.replace(/_/g,' '),
+      (data.throughput_mbps||0).toFixed(1)+' M',
+      cur.toFixed(1)+' M', '');
+  }
+
+  panel.innerHTML = html ||
+    '<div style="font-size:11px;color:var(--dim);text-align:center;padding:8px">No zone data in baseline</div>';
+  $('#baselinePanel').style.display = '';
+}
+
+function blRow(label, before, after, note) {
+  return `<div class="baseline-row">
+    <span class="bl-label">${label}</span>
+    <span class="bl-before">${before}</span>
+    <span style="color:var(--dim);font-size:10px">→</span>
+    <span class="bl-after">${after}</span>
+  </div>`;
+}
+
+// fetchPcActivities: thin wrapper used by capture_baseline handler
+function fetchPcActivities() { refresh(); }
+
+// ═══════════════════════════════════════════════════════════════
+//  PC BROWSER MODAL
+// ═══════════════════════════════════════════════════════════════
+
+// App definitions for the PC browser UI
+const PC_APPS = [
+  {activity:'exam',            icon:'📝', name:'Online Exam',      sub:'MIS/ERP System',    url:'https://mis.tumba.edu/exam',     color:'#ef4444'},
+  {activity:'video_conf',      icon:'📹', name:'Google Meet',      sub:'Meet / Teams',      url:'https://meet.tumba.edu',         color:'#3b82f6'},
+  {activity:'elearning',       icon:'📚', name:'E-Learning',       sub:'Moodle LMS',        url:'https://moodle.tumba.edu',       color:'#10b981'},
+  {activity:'mis',             icon:'🗂', name:'MIS Access',       sub:'Admin System',      url:'https://mis.tumba.edu',          color:'#0ea5e9'},
+  {activity:'research',        icon:'🔬', name:'Research',         sub:'Academic Research', url:'https://library.tumba.edu',      color:'#8b5cf6'},
+  {activity:'video_streaming', icon:'📺', name:'Streaming',        sub:'Media Streaming',   url:'https://stream.tumba.edu',       color:'#f59e0b'},
+  {activity:'file_download',   icon:'📁', name:'Large Download',   sub:'Bulk Transfer',     url:'https://files.tumba.edu',        color:'#f97316'},
+  {activity:'social_media',    icon:'💬', name:'Social Media',     sub:'Entertainment',     url:'https://social.tumba.edu',       color:'#06b6d4'},
+  {activity:'ddos_attack',     icon:'⚡', name:'Security Test',    sub:'DDoS Simulation',   url:'https://security.tumba.edu/test', color:'#dc2626'},
+  {activity:'idle',            icon:'⬜', name:'Close Apps',       sub:'Set to Idle',        url:'https://campus.tumba.edu',        color:'#64748b'},
+];
+
+let pcbCurrentHost = null;
+
+function openPcBrowser(hostId) {
+  const pcDef = allPcDefs().find(p => p.id === hostId) || {};
+  const hDef = HOSTS.find(h => h.id === hostId) || {
+    id: hostId,
+    label: pcDef.label || hostId,
+    ip: pcDef.ip || '',
+    sw: pcState[hostId]?.switch || 'ovs_ext',
+    icon: pcState[hostId]?.external ? '🪟' : '●',
+    clickable: true,
+  };
+  if (!hDef) return;
+
+  pcbCurrentHost = hostId;
+  const pci = pcState[hostId] || {};
+  const act = pci.activity || 'idle';
+  const bw  = pci.traffic_mbps || 0;
+  const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+
+  $('#pcbTitle').textContent = `${hDef.label}  —  ${hDef.ip}`;
+  $('#pcbUrlInput').value = (pcState[hostId] || {}).browser_url || 'https://campus.tumba.local';
+
+  // Build app grid
+  let appsHtml = '';
+  PC_APPS.forEach(app => {
+    const isActive = app.activity === act;
+    const bwHint = app.activity !== 'idle' ? `~${ACTIVITY_DEFS[app.activity]?.bw||0}M` : '';
+    appsHtml += `<div class="pcb-app${isActive?' active-app':''}" style="color:${app.color};--app-rgb:${hexToRgb(app.color)}" onclick="activateApp('${app.activity}','${app.url}')">
+      <div class="pcb-app-icon">${app.icon}</div>
+      <div class="pcb-app-name" style="color:${isActive?app.color:'var(--txt)'}">${app.name}</div>
+      <div class="pcb-app-sub">${app.sub}</div>
+      ${bwHint?`<div class="pcb-app-bw" style="color:${app.color}">${bwHint}</div>`:''}
+      ${isActive?`<div style="position:absolute;top:5px;right:5px;width:7px;height:7px;border-radius:50%;background:${app.color};animation:pulse 1.5s infinite"></div>`:''}
+    </div>`;
+  });
+  $('#pcbApps').innerHTML = appsHtml;
+
+  // Status bar
+  updatePcbStatus(pci);
+  fetch(`/api/pc_details/${hostId}`).then(r=>r.json()).then(applyPcDetails).catch(()=>{});
+  $('#pcbModal').style.display = 'flex';
+}
+
+function closePcBrowser() {
+  $('#pcbModal').style.display = 'none';
+  pcbCurrentHost = null;
+}
+
+function activateApp(activity, url) {
+  if (!pcbCurrentHost) return;
+  // Update URL bar to look like user navigated
+  const app = PC_APPS.find(a => a.activity === activity);
+  if (app) $('#pcbUrlInput').value = app.url || url;
+
+  // Set activity via API
+  setActivity(pcbCurrentHost, activity);
+
+  // Optimistic UI update in modal
+  const actDef = ACTIVITY_DEFS[activity] || ACTIVITY_DEFS.idle;
+  const bwEst = actDef.bw * 0.8;
+  updatePcbStatus({activity, traffic_mbps: bwEst, priority: actDef.pri});
+
+  // Re-render app buttons to show new active state
+  $$('.pcb-app').forEach(el => el.classList.remove('active-app'));
+  // Rebuild apps to show active state
+  setTimeout(() => {
+    if (pcbCurrentHost) openPcBrowser(pcbCurrentHost);
+  }, 300);
+}
+
+function updatePcbStatus(pci) {
+  const act = pci.activity || 'idle';
+  const currentBw = pci.current_mbps || pci.traffic_mbps || 0;
+  const actDef = ACTIVITY_DEFS[act] || ACTIVITY_DEFS.idle;
+  const maxBw = actDef.bw || 1;
+  const pct = Math.min(100, (currentBw / maxBw) * 100);
+
+  $('#pcbCurAct').textContent = actDef.label;
+  $('#pcbCurAct').style.color = actDef.color;
+  $('#pcbBwVal').textContent = `${currentBw.toFixed(1)} Mbps`;
+  $('#pcbBwVal').style.color = actDef.color;
+  $('#pcbBwFill').style.width = `${pct}%`;
+  $('#pcbBwFill').style.background = actDef.color;
+  $('#pcbPriLabel').textContent = PRI_LABELS[actDef.pri] || 'Best-Effort';
+  $('#pcbPriLabel').style.color = actDef.color;
+  $('#pcbBrowserStatus').textContent = pci.browser_status || 'Idle';
+}
+
+function applyPcDetails(data) {
+  if (!data?.ok) return;
+  const pc = data.pc || {};
+  const link = data.link || {};
+  const decision = data.priority_decision || {};
+  const security = data.security || {};
+  $('#pcbUrlInput').value = pc.browser_url || $('#pcbUrlInput').value;
+  $('#pcbBrowserStatus').textContent = pc.browser_status || security.status || 'Idle';
+  const rows = [
+    ['MAC', pc.mac || '—'],
+    ['VLAN / Zone', `${pc.vlan || '—'} / ${String(pc.zone_label || pc.zone || '—').replace(/_/g,' ')}`],
+    ['Connected Switch', pc.switch || '—'],
+    ['Current Activity', pc.activity_label || pc.activity || 'Idle'],
+    ['Current Mbps', `${(pc.current_mbps || pc.traffic_mbps || 0).toFixed(2)} Mbps`],
+    ['Link Capacity', `${(pc.link_capacity_mbps || 100).toFixed(0)} Mbps`],
+    ['Utilization', `${(pc.utilization_percent || 0).toFixed(1)}%`],
+    ['Priority / DSCP', `${pc.priority_level || '—'} / ${pc.dscp ?? '—'}`],
+    ['Congestion State', link.threshold_state || pc.congestion_state || 'healthy'],
+    ['Security State', security.security_state || pc.security_state || 'normal'],
+    ['Controller Action', decision.action_taken || pc.controller_action || 'Monitoring only'],
+    ['Last Alert', pc.last_alert || security.evidence || '—'],
+  ];
+  $('#pcbDetails').innerHTML = rows.map(([k,v])=>`<div style="background:rgba(15,23,42,.55);border:1px solid var(--border);border-radius:8px;padding:8px 10px"><div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.4px">${k}</div><div style="font-size:12px;font-weight:600;margin-top:3px">${v}</div></div>`).join('');
+  updatePcbStatus(pc);
+}
+
+function openBrowserUrl() {
+  if (!pcbCurrentHost) return;
+  const url = ($('#pcbUrlInput').value || '').trim();
+  fetch('/api/browser_open', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({host: pcbCurrentHost, url})
+  }).then(r=>r.json()).then(d=>{
+    $('#pcbBrowserStatus').textContent = d.browser_status || (d.ok ? 'Connected' : 'Blocked');
+    setTimeout(()=>refresh(), 400);
+  });
+}
+
+function runPcTool(command) {
+  if (!pcbCurrentHost) return;
+  fetch('/api/run_tool', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({host: pcbCurrentHost, command})
+  }).then(r=>r.json()).then(d=>{
+    $('#pcbBrowserStatus').textContent = d.ok ? 'Terminal' : 'Blocked';
+    setTimeout(()=>refresh(), 400);
+  });
+}
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return `${r},${g},${b}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CHART.JS — Analytics charts
+// ═══════════════════════════════════════════════════════════════
+const ZONE_COLORS = {
+  staff_lan:    '#10d9a0',
+  server_zone:  '#06b6d4',
+  it_lab:       '#a855f7',
+  student_wifi: '#f59e0b',
+  external_vm:  '#22d3ee',
+};
+const CHART_OPTS = {
+  responsive: true, animation: false,
+  plugins: { legend: { labels: { color: '#94a3b8', font: { size: 11 } } } },
+  scales: {
+    x: { ticks: { color: '#475569', font:{size:9}, maxTicksLimit:8 }, grid: { color:'rgba(42,53,85,.4)' } },
+    y: { ticks: { color: '#475569', font:{size:10} }, grid: { color:'rgba(42,53,85,.4)' } },
+  },
+};
+
+let chartTput, chartUtil, chartDqn;
+
+function initCharts() {
+  const zones = ['staff_lan','server_zone','it_lab','student_wifi','external_vm'];
+  const labels = ['Staff LAN','Server Zone','IT Lab','Student WiFi','External VM'];
+
+  chartTput = new Chart($('#chartThroughput'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: zones.map((z, i) => ({
+        label: labels[i], data: [], borderColor: ZONE_COLORS[z],
+        backgroundColor: ZONE_COLORS[z]+'22', fill: true,
+        tension: 0.4, pointRadius: 1, borderWidth: 2,
+      })),
+    },
+    options: {...CHART_OPTS, scales: {...CHART_OPTS.scales,
+      y: {...CHART_OPTS.scales.y, title:{display:true,text:'Mbps',color:'#475569'}}}},
+  });
+
+  chartUtil = new Chart($('#chartUtil'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: zones.map((z, i) => ({
+        label: labels[i], data: [], borderColor: ZONE_COLORS[z],
+        backgroundColor: 'transparent', tension: 0.4, pointRadius: 1, borderWidth: 2,
+      })),
+    },
+    options: {...CHART_OPTS, scales: {...CHART_OPTS.scales,
+      y: {...CHART_OPTS.scales.y, min:0, max:100,
+          title:{display:true,text:'%',color:'#475569'}}}},
+  });
+
+  chartDqn = new Chart($('#chartDqn'), {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [
+        {label:'Reward', data:[], borderColor:'#10d9a0', backgroundColor:'#10d9a022', fill:true, tension:0.4, pointRadius:1, borderWidth:2},
+        {label:'Epsilon×10', data:[], borderColor:'#f59e0b', backgroundColor:'transparent', tension:0.4, pointRadius:1, borderWidth:1.5, borderDash:[4,4]},
+      ],
+    },
+    options: {...CHART_OPTS, scales: {...CHART_OPTS.scales,
+      y: {...CHART_OPTS.scales.y, title:{display:true,text:'Value',color:'#475569'}}}},
+  });
+}
+
+function updateCharts(samples) {
+  if (!chartTput || !samples || samples.length === 0) return;
+  const zones = ['staff_lan','server_zone','it_lab','student_wifi','external_vm'];
+  const labels = samples.map(s => new Date(s.ts*1000).toLocaleTimeString());
+
+  // Throughput
+  chartTput.data.labels = labels;
+  zones.forEach((z, i) => {
+    chartTput.data.datasets[i].data = samples.map(s => (s.zones[z]?.throughput_mbps||0).toFixed(2));
+  });
+  chartTput.update('none');
+
+  // Utilisation
+  chartUtil.data.labels = labels;
+  zones.forEach((z, i) => {
+    chartUtil.data.datasets[i].data = samples.map(s => (s.zones[z]?.max_utilization_pct||0).toFixed(1));
+  });
+  chartUtil.update('none');
+
+  // DQN
+  chartDqn.data.labels = labels;
+  chartDqn.data.datasets[0].data = samples.map(s => (s.reward||0).toFixed(3));
+  chartDqn.data.datasets[1].data = samples.map(s => ((s.epsilon||0)*10).toFixed(3));
+  chartDqn.update('none');
+
+  $('#anSamples').textContent = `${samples.length} samples`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ALERTS
+// ═══════════════════════════════════════════════════════════════
+let _alertCount = 0;
+
+function applyAlertPayload(d = {}) {
+  const alerts = d.alerts || [];
+  const totalCount = Number.isFinite(Number(d.count)) ? Number(d.count) : alerts.length;
+  const badge = $('#alertBadge');
+  if (badge) {
+    if (totalCount > 0) {
+      badge.style.display = 'block';
+      badge.textContent = totalCount > 99 ? '99+' : String(totalCount);
+    } else {
+      badge.style.display = 'none';
+      badge.textContent = '0';
+    }
+  }
+  _alertCount = totalCount;
+  renderAlertList(alerts);
+  renderThreats(alerts);
+}
+
+function refreshAlerts() {
+  fetch('/api/alerts').then(r=>r.json()).then(applyAlertPayload).catch(()=>{});
+}
+
+function renderAlertList(alerts) {
+  if (!alerts.length) {
+    $('#alertList').innerHTML = '<div style="color:var(--dim);font-size:12px;padding:8px">No recent alerts</div>';
+    return;
+  }
+  const sevIcon  = {critical:'🔴', preventive:'🟠', warning:'🟡', healthy:'🟢'};
+  const sevColor = {critical:'#ef4444', preventive:'#f97316', warning:'#f59e0b', healthy:'#10d9a0'};
+  $('#alertList').innerHTML = alerts.slice(-10).reverse().map(a => {
+    const icon = sevIcon[a.severity] || '⚪';
+    const col  = sevColor[a.severity] || '#64748b';
+    const extraFields = (a.device && a.action_taken) ? `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:2px;margin-top:4px;font-size:10px;color:var(--dim)">
+        <span><b>Device:</b> ${a.device}</span>
+        <span><b>Util:</b> ${(a.utilization_pct||0).toFixed(1)}%</span>
+        <span><b>Type:</b> ${a.traffic_type||'—'}</span>
+        <span><b>Risk:</b> ${(a.risk_level||'').split('—')[0]||'—'}</span>
+      </div>` : '';
+    return `<div class="alert-item ${a.severity}">
+      <div class="alert-title" style="color:${col}">${icon} ${a.title||a.device||'Alert'}</div>
+      <div class="alert-detail">${a.detail}</div>
+      ${extraFields}
+      <div class="alert-ts">${new Date(a.ts*1000).toLocaleTimeString()}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderThreats(alerts) {
+  // Legacy: called from refreshAlerts; now we use the threats API directly in refreshSecurity
+  const el = $('#secThreats'); if (!el) return;
+  const all = alerts.filter(a=>a.severity==='critical'||a.severity==='warning').slice(-6);
+  if (!all.length) {
+    el.innerHTML = '<div class="threat-badge ok"><span>✓</span><span style="font-size:12px">No active threats detected</span></div>';
+    return;
+  }
+  el.innerHTML = all.reverse().map(a=>`
+    <div class="threat-badge ${a.severity}">
+      <span>${a.severity==='critical'?'🔴':'🟡'}</span>
+      <div style="flex:1">
+        <div style="font-size:12px;font-weight:700">${a.title}</div>
+        <div style="font-size:11px;color:var(--dim)">${a.detail}</div>
+      </div>
+    </div>`).join('');
+}
+
+function renderThreatsFromAPI(threats) {
+  const el = $('#secThreats'); if (!el) return;
+  if (!threats.length) {
+    el.innerHTML = '<div class="threat-badge ok"><span>✓</span><span style="font-size:12px">No active threats detected — system secure</span></div>';
+    return;
+  }
+  const typeIcon = {ddos:'⚡', port_scan:'🔍', network_sweep:'🌐', arp_spoof:'🔀', mac_flood:'💥'};
+  el.innerHTML = threats.map(t=>{
+    const icon = typeIcon[t.type] || '⚠';
+    const conf = t.confidence !== undefined ? `<span style="font-size:10px;color:var(--dim);margin-left:8px">confidence: ${t.confidence}%</span>` : '';
+    const srcLine = t.src_ip ? `<div style="font-size:11px;color:var(--dim)">Source: ${t.src_ip} (${t.zone||'unknown zone'})</div>` : '';
+    const blockedBadge = t.blocked ? `<span style="background:#10b981;color:#000;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">BLOCKED</span>` : `<span style="background:#f59e0b;color:#000;border-radius:3px;padding:1px 5px;font-size:9px;font-weight:700">ACTIVE</span>`;
+    return `<div class="threat-badge ${t.severity}" style="flex-direction:column;align-items:flex-start;gap:4px;padding:10px 12px">
+      <div style="display:flex;align-items:center;gap:8px;width:100%">
+        <span style="font-size:16px">${icon}</span>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:700">${t.title}${conf}</div>
+          ${srcLine}
+          <div style="font-size:11px;color:var(--dim)">${t.detail||''}</div>
+        </div>
+        ${blockedBadge}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LIVE FLOWS TABLE
+// ═══════════════════════════════════════════════════════════════
+function refreshFlows() {
+  fetch('/api/flows').then(r=>r.json()).then(d=>{
+    const flows = d.flows || [];
+    const el = $('#flowTbody'); if (!el) return;
+    if (!flows.length) {
+      el.innerHTML = '<tr><td colspan="13" style="color:var(--dim);text-align:center">No active flows — all PCs idle</td></tr>';
+    } else {
+      const priColor = {CRITICAL:'#ef4444', HIGH:'#f59e0b', MEDIUM:'#a855f7', LOW:'#06b6d4', 'BEST-EFFORT':'#64748b', THREAT:'#dc2626'};
+      const secColor = {normal:'#10d9a0', suspicious:'#eab308', threat:'#f97316', critical:'#ef4444'};
+      el.innerHTML = flows.map(f=>{
+        const col = priColor[f.priority] || '#64748b';
+        const sCol = secColor[f.security_state] || '#64748b';
+        const dest = `${f.dst_ip || '—'}${f.dst_port?':'+f.dst_port:''}`;
+        return `<tr>
+          <td><span style="font-weight:600">${f.source_pc||f.src_label||f.src_ip}</span><br><span style="font-size:10px;color:var(--dim)">${f.src_mac||'—'}</span></td>
+          <td>${f.src_ip||'—'}</td>
+          <td>VLAN ${f.src_vlan||'—'}<br><span style="font-size:10px;color:var(--dim)">${(f.src_zone||'').replace(/_/g,' ')} · ${f.src_switch||'—'}</span></td>
+          <td>${dest}</td>
+          <td>${f.dst_service_name||'—'}</td>
+          <td><span class="stat-v b">${f.proto||'TCP'}</span></td>
+          <td>${f.activity||'—'}</td>
+          <td><span style="font-weight:700;color:${(f.mbps||0)>5?'#ef4444':(f.mbps||0)>2?'#f59e0b':'#10d9a0'}">${(f.mbps||0).toFixed(2)} Mbps</span></td>
+          <td><span style="color:${col};font-weight:700;font-size:11px">${f.priority||'—'}</span></td>
+          <td style="font-size:11px;color:var(--dim)">DSCP ${f.dscp??0}</td>
+          <td style="font-size:11px">${f.controller_action||'Monitoring only'}</td>
+          <td style="font-size:11px">${f.status||'Active'}</td>
+          <td><span style="color:${sCol};font-weight:700;font-size:11px">${f.security_state||'normal'}</span></td>
+        </tr>`;
+      }).join('');
+    }
+    const cnt = $('#flowCount'); if(cnt) cnt.textContent = `${flows.length} active flow${flows.length!==1?'s':''}`;
+  }).catch(()=>{});
+}
+
+$('#btnAlerts').addEventListener('click', () => {
+  const d = $('#alertDropdown');
+  d.style.display = d.style.display === 'none' ? 'block' : 'none';
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  AUTO TRAFFIC ENGINE controls
+// ═══════════════════════════════════════════════════════════════
+function refreshAutoTraffic() {
+  fetch('/api/auto_traffic').then(r=>r.json()).then(d=>{
+    if (!d || !d.ts) return;
+    const el = $('#autoStatus');
+    if (el) el.textContent = d.paused ? '⏸ Paused' : (d.scenario_active ? `▶ Scenario: ${d.scenario}` : '▶ Autonomous');
+  }).catch(()=>{});
+}
+
+$('#btnAutoResume').addEventListener('click', () => {
+  fetch('/api/auto_traffic/resume',{method:'POST'}).then(r=>r.json())
+    .then(()=>{ $('#scLog').textContent='[AutoTraffic] Resumed autonomous mode'; refreshAutoTraffic(); })
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+$('#btnAutoPause').addEventListener('click', () => {
+  fetch('/api/auto_traffic/pause',{method:'POST'}).then(r=>r.json())
+    .then(()=>{ $('#scLog').textContent='[AutoTraffic] Paused'; refreshAutoTraffic(); })
+    .catch(e=>$('#scLog').textContent='Error: '+e);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  SECURITY page updater
+// ═══════════════════════════════════════════════════════════════
+function refreshSecurity() {
+  fetch('/api/security').then(r=>r.json()).then(sec=>{
+    const scans = sec.active_scans || [];
+    const blockedIPs = sec.blocked_ips || [];
+    const hasThreat = sec.ddos_active || scans.length > 0;
+    $('#secStatus').textContent = hasThreat ? '⚠ ALERT' : '✓ Secure';
+    $('#secBlocked').textContent = sec.security_blocked || 0;
+    if ($('#secBlockedIPs')) $('#secBlockedIPs').textContent = `${blockedIPs.length} IPs blocked`;
+    if ($('#secBlockedIPCount')) $('#secBlockedIPCount').textContent = blockedIPs.length;
+    const ddosOrScan = sec.ddos_active ? 'DDoS' : scans.length ? 'Scan' : 'Clear';
+    $('#secDdos').textContent = ddosOrScan;
+    if ($('#secExamMode')) $('#secExamMode').textContent = sec.exam_mode ? 'ON' : 'OFF';
+    // Active threats KPI
+    if ($('#secCongPred')) $('#secCongPred').textContent = scans.length + (sec.ddos_active?1:0);
+    if ($('#secThreatSub')) $('#secThreatSub').textContent = scans.map(s=>s.type.replace(/_/g,' ')).join(', ') || 'none detected';
+    // Event log — enriched for scan events
+    const evts = sec.security_events || sec.events || [];
+    if ($('#secLog')) {
+      $('#secLog').textContent = evts.length
+        ? evts.slice(-25).reverse().map(e=>{
+            const t=new Date(e.ts*1000).toLocaleTimeString();
+            let detail=e.event.replace(/_/g,' ');
+            if(e.src_ip)  detail+=` | src=${e.src_ip}`;
+            if(e.zone)    detail+=` | zone=${e.zone}`;
+            if(e.ports_scanned) detail+=` | ${e.ports_scanned} ports`;
+            if(e.ip_count)      detail+=` | ${e.ip_count} IPs`;
+            if(e.confidence)    detail+=` | conf=${e.confidence}%`;
+            if(e.pps)           detail+=` | ${e.pps} pps`;
+            return `[${t}] ${detail}`;
+          }).join('\n')
+        : 'No security events.';
+    }
+  }).catch(()=>{});
+
+  // Threats API — separate call for the Active Threats panel
+  fetch('/api/threats').then(r=>r.json()).then(d=>{
+    renderThreatsFromAPI(d.threats || []);
+  }).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONTROL CENTER policy status
+// ═══════════════════════════════════════════════════════════════
+function refreshControlCenter(m, ml, tt) {
+  if ($('#ctrlExamMode'))   $('#ctrlExamMode').textContent  = m.exam_mode    ? '✅ ACTIVE' : '—';
+  if ($('#ctrlThrottle'))   $('#ctrlThrottle').textContent  = m.throttle_active ? '✅ ACTIVE' : '—';
+  if ($('#ctrlLastAction')) $('#ctrlLastAction').textContent = ml.action || '—';
+  if ($('#ctrlPeriod'))     $('#ctrlPeriod').textContent    = tt.period || '—';
+  const cp = m.congestion_predicted || {};
+  const zones = Object.entries(cp).filter(([,v])=>v).map(([z])=>z.replace(/_/g,' '));
+  if ($('#ctrlPredicted')) $('#ctrlPredicted').textContent = zones.length ? zones.join(', ') : '✓ None';
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  HISTORY — fetch and update charts
+// ═══════════════════════════════════════════════════════════════
+function refreshHistory() {
+  fetch('/api/history').then(r=>r.json()).then(d=>{
+    updateCharts(d.samples || []);
+  }).catch(()=>{});
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  PROACTIVE CONGESTION PAGE
+// ═══════════════════════════════════════════════════════════════
+function refreshProactiveCongestion() {
+  fetch('/api/proactive_congestion').then(r=>r.json()).then(pc=>{
+    proactiveState = pc || {};
+    drawTopology(null);
+    const zones = pc.zones || {};
+    const agg   = pc.network_aggregation || {};
+    const sats  = pc.device_saturation || [];
+    const alerts = pc.recent_alerts || [];
+
+    // ── KPI bar ──
+    const ctrlUtil = agg.controller_link_util_pct || 0;
+    const ctrlMbps = agg.total_throughput_mbps || 0;
+    $('#pcCtrlUtil').textContent = `${ctrlUtil.toFixed(1)}%`;
+    $('#pcCtrlMbps').textContent = `${ctrlMbps.toFixed(1)} / 1000 Mbps`;
+    $('#pcCtrlUtil').style.color = utilColorCSS(ctrlUtil);
+    const warnCount = Object.values(zones).filter(z=>z.threshold_state!=='healthy').length;
+    $('#pcWarnCount').textContent = warnCount;
+    $('#pcSatCount').textContent  = sats.length;
+    $('#pcAlertCount').textContent = pc.new_alerts_this_cycle || alerts.length;
+
+    // ── Zone threshold states ──
+    const stateEl = $('#pcZoneStates');
+    if (stateEl) {
+      const zoneColors = {healthy:'#10d9a0', warning:'#eab308', preventive:'#f97316', critical:'#ef4444'};
+      const zoneNames  = {staff_lan:'Staff LAN', server_zone:'Server Zone', it_lab:'IT Lab', student_wifi:'Student WiFi', external_vm:'External VM'};
+      stateEl.innerHTML = Object.entries(zones).map(([k,z])=>{
+        const col   = zoneColors[z.threshold_state] || '#64748b';
+        const util  = z.utilization_pct || 0;
+        const mbps  = z.throughput_mbps || 0;
+        const cap   = z.uplink_capacity_mbps || 1000;
+        const action= z.recommended_action || 'Monitor';
+        return `<div class="pcong-zone">
+          <div class="pcong-zone-header">
+            <span style="font-weight:700;font-size:13px">${zoneNames[k]||k}</span>
+            <span class="pcong-state-badge ${z.threshold_state}">${z.threshold_state.toUpperCase()}</span>
+          </div>
+          <div style="font-size:11px;color:var(--dim);margin-bottom:4px">${mbps.toFixed(2)} Mbps / ${cap} Mbps — ${util.toFixed(1)}% utilization</div>
+          <div class="pcong-bar"><div class="pcong-bar-fill" style="width:${Math.min(100,util)}%;background:${col}"></div></div>
+          <div class="pcong-metrics">
+            <div><div class="pcong-metric-val">${(z.latency_ms||0).toFixed(1)} ms</div><div>Latency</div></div>
+            <div><div class="pcong-metric-val">${(z.loss_pct||0).toFixed(2)}%</div><div>Loss</div></div>
+            <div><div class="pcong-metric-val">${z.device_count||0}</div><div>Devices</div></div>
+          </div>
+          <div style="font-size:10px;color:${col};margin-top:5px;font-weight:600">▶ ${action}</div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Future load prediction ──
+    const futEl = $('#pcFutureLoad');
+    if (futEl) {
+      futEl.innerHTML = Object.entries(zones).map(([k,z])=>{
+        const fl     = z.future_load || {};
+        const cur    = (fl.current_util_pct || z.utilization_pct || 0).toFixed(1);
+        const proj   = (fl.projected_util_pct || 0).toFixed(1);
+        const gr     = fl.growth_rate_pct !== undefined ? fl.growth_rate_pct : (z.growth_rate_pct || 0);
+        const ema    = (fl.historical_ema_pct || 0).toFixed(1);
+        const risk   = fl.risk || z.predicted_congestion;
+        const col    = risk ? '#f97316' : '#10d9a0';
+        const zn     = {staff_lan:'Staff LAN', server_zone:'Server Zone', it_lab:'IT Lab', student_wifi:'WiFi', external_vm:'External VM'}[k]||k;
+        return `<div style="border-bottom:1px solid var(--border);padding:8px 0">
+          <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+            <span style="font-weight:700;font-size:12px">${zn}</span>
+            <span style="font-size:10px;color:${col};font-weight:600">${risk?'⚠ RISK':'✓ Stable'}</span>
+          </div>
+          <div class="tight-grid-2" style="font-size:10px;color:var(--dim);gap:2px">
+            <span>Current: <b style="color:var(--txt)">${cur}%</b></span>
+            <span>Projected: <b style="color:${col}">${proj}%</b></span>
+            <span>Growth: <b style="color:${parseFloat(gr)>0?'#f97316':'#10d9a0'}">${parseFloat(gr)>0?'+':''}${parseFloat(gr).toFixed(3)}%/s</b></span>
+            <span>EMA: <b style="color:var(--txt)">${ema}%</b></span>
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-top:3px">
+            Future Load = ${cur}% + (growth × 5) + (EMA trend) = <b style="color:${col}">${proj}%</b>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    // ── Aggregation chain ──
+    const aggEl = $('#pcAggChain');
+    if (aggEl) {
+      const zoneList = Object.values(zones);
+      const distLinks = pc.distribution_uplinks || {};
+      const ds1Mbps  = distLinks.ds1?.current_mbps || ((zones.staff_lan?.throughput_mbps||0) + (zones.server_zone?.throughput_mbps||0));
+      const ds2Mbps  = distLinks.ds2?.current_mbps || ((zones.it_lab?.throughput_mbps||0) + (zones.student_wifi?.throughput_mbps||0) + (zones.external_vm?.throughput_mbps||0));
+      const totalMbps = ctrlMbps;
+      const stateClr = {'healthy':'#10d9a0','warning':'#eab308','preventive':'#f97316','critical':'#ef4444'};
+
+      aggEl.innerHTML = `
+        <div style="font-size:11px;color:var(--dim);margin-bottom:10px">
+          Formula: <code style="background:var(--surface2);padding:2px 6px;border-radius:4px">Access_Uplink = Σ(device traffic) → Distribution_Uplink = Σ(access uplinks) → Controller = Σ(distribution uplinks)</code>
+        </div>
+        <div class="split-4-tight" style="font-size:11px">
+          ${zoneList.map(z=>{
+            const col = stateClr[z.threshold_state]||'#64748b';
+            const zn = {staff_lan:'Staff LAN',server_zone:'Server Zone',it_lab:'IT Lab',student_wifi:'WiFi',external_vm:'External VM'}[z.zone]||z.zone;
+            return `<div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px;text-align:center">
+              <div style="font-size:9px;color:var(--dim);font-weight:700;text-transform:uppercase">${zn}</div>
+              <div style="font-size:15px;font-weight:800;color:${col};margin:4px 0">${(z.throughput_mbps||0).toFixed(1)}</div>
+              <div style="font-size:9px;color:var(--dim)">Mbps (${(z.utilization_pct||0).toFixed(1)}%)</div>
+              <div style="font-size:9px;color:var(--dim);margin-top:3px">${z.device_count||0} devices</div>
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin:10px 0;font-size:11px;color:var(--dim)">
+          <span>↓ Aggregated</span>
+        </div>
+        <div class="split-2-tight">
+          <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:#a855f7;font-weight:700">Distribution DS1</div>
+            <div style="font-size:18px;font-weight:800;color:#a855f7;margin:4px 0">${ds1Mbps.toFixed(1)} Mbps</div>
+            <div style="font-size:10px;color:var(--dim)">Staff + Server / 1000 Mbps (${(ds1Mbps/10).toFixed(1)}%)</div>
+          </div>
+          <div style="background:rgba(168,85,247,.08);border:1px solid rgba(168,85,247,.3);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:#a855f7;font-weight:700">Distribution DS2</div>
+            <div style="font-size:18px;font-weight:800;color:#a855f7;margin:4px 0">${ds2Mbps.toFixed(1)} Mbps</div>
+            <div style="font-size:10px;color:var(--dim)">Lab + WiFi / 1000 Mbps (${(ds2Mbps/10).toFixed(1)}%)</div>
+          </div>
+        </div>
+        <div style="text-align:center;margin:8px 0;font-size:11px;color:var(--dim)">↓ SDN Controller link</div>
+        <div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.3);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:#3b82f6;font-weight:700">SDN Controller — 1 Gbps backbone</div>
+          <div style="font-size:22px;font-weight:800;color:${utilColorCSS(ctrlUtil)};margin:4px 0">${totalMbps.toFixed(1)} Mbps</div>
+          <div style="font-size:10px;color:var(--dim)">${ctrlUtil.toFixed(2)}% of 1000 Mbps</div>
+          <div class="pcong-bar" style="margin-top:6px"><div class="pcong-bar-fill" style="width:${Math.min(100,ctrlUtil)}%;background:${utilColorCSS(ctrlUtil)}"></div></div>
+        </div>`;
+    }
+
+    // ── Port saturation ──
+    const satEl = $('#pcSatList');
+    if (satEl) {
+      if (!sats.length) {
+        satEl.innerHTML = '<div style="color:#10d9a0;font-size:12px">✓ No port saturation detected — all devices within 100 Mbps capacity</div>';
+      } else {
+        satEl.innerHTML = sats.map(s=>{
+          const col = s.severity==='critical' ? '#ef4444' : '#f59e0b';
+          return `<div class="saturation-item ${s.severity==='warning'?'warning':''}">
+            <span style="font-size:18px">${s.severity==='critical'?'🔴':'🟡'}</span>
+            <div style="flex:1">
+              <div style="font-weight:700;font-size:13px;color:${col}">${s.label||s.pc_id}</div>
+              <div style="font-size:11px;color:var(--dim)">${s.traffic_mbps} Mbps / 100 Mbps — ${s.utilization_pct}% utilization</div>
+              <div style="font-size:10px;color:var(--dim)">Activity: ${s.activity||'unknown'}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-size:14px;font-weight:800;color:${col}">${s.utilization_pct}%</div>
+              <div style="font-size:9px;color:${col};font-weight:700;text-transform:uppercase">${s.severity==='critical'?'PORT SATURATION':'High Usage'}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+    // ── Structured alerts ──
+    const saEl = $('#pcStructuredAlerts');
+    const tsEl = $('#pcAlertTs');
+    if (saEl) {
+      if (tsEl && pc.ts) tsEl.textContent = `Updated: ${new Date(pc.ts*1000).toLocaleTimeString()}`;
+      const sevColor = {critical:'#ef4444', preventive:'#f97316', warning:'#eab308', healthy:'#10d9a0'};
+      if (!alerts.length) {
+        saEl.innerHTML = '<div style="color:#10d9a0;font-size:12px">✓ No alerts this cycle</div>';
+      } else {
+        saEl.innerHTML = alerts.slice(-10).reverse().map(a=>{
+          const col  = sevColor[a.severity] || '#64748b';
+          const icon = {critical:'🔴', preventive:'🟠', warning:'🟡', healthy:'🟢'}[a.severity] || '⚪';
+          return `<div class="alert-item ${a.severity}" style="margin-bottom:8px">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+              <span style="font-weight:800;font-size:12px;color:${col}">${icon} ${(a.severity||'').toUpperCase()}</span>
+              <span style="font-size:10px;color:var(--dim)">${new Date((a.ts||0)*1000).toLocaleTimeString()}</span>
+            </div>
+            <div class="alert-fields">
+              <div><span class="alert-field-key">Device/Link:</span> ${a.affected_device_or_link||a.device||'—'}</div>
+              <div><span class="alert-field-key">Utilization:</span> ${((a.utilization_percent ?? a.utilization_pct) || 0).toFixed(1)}%</div>
+              <div><span class="alert-field-key">Load:</span> ${((a.current_mbps)||0).toFixed(1)} / ${((a.capacity_mbps)||0).toFixed(0)} Mbps</div>
+              <div><span class="alert-field-key">Traffic Type:</span> ${a.traffic_type||'—'}</div>
+              <div><span class="alert-field-key">Priority:</span> ${a.priority_level||'—'}</div>
+              <div><span class="alert-field-key">Risk Level:</span> ${a.risk_level||'—'}</div>
+              <div style="grid-column:1/-1"><span class="alert-field-key">Prediction:</span> ${a.prediction||'—'}</div>
+              <div style="grid-column:1/-1"><span class="alert-field-key">Action Taken:</span> ${a.action_taken||'—'}</div>
+              <div style="grid-column:1/-1"><span class="alert-field-key">Status:</span> ${a.current_status||'—'}</div>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
+
+  }).catch(()=>{
+    const el = $('#pcZoneStates');
+    if (el) el.innerHTML = '<div style="color:var(--dim);font-size:12px">Proactive Congestion service offline — deriving from metrics…</div>';
+  });
+}
+
+// Helper: CSS color from utilization %
+function utilColorCSS(pct) {
+  if (pct >= 90) return '#ef4444';
+  if (pct >= 85) return '#f97316';
+  if (pct >= 70) return '#eab308';
+  if (pct >  0)  return '#10d9a0';
+  return '#64748b';
+}
+
+// ─── STARTUP — all const/let declarations above are initialized by this point ───
+function bootDashboard() {
+  if (dashboardBooted) return;
+  dashboardBooted = true;
+
+  initCharts();
+  initRealtime();
+  setInterval(()=>drawTopology(null), 800);
+  drawTopology(null);
+  refresh();
+  setInterval(refresh, 2000);
+  setInterval(refreshAlerts, 5000);
+  setInterval(refreshHistory, 6000);
+  setInterval(refreshAutoTraffic, 8000);
+  setInterval(refreshSecurity, 4000);
+  setInterval(refreshFlows, 3000);
+  setInterval(refreshProactiveCongestion, 4000);
+  refreshAlerts();
+  refreshHistory();
+  refreshAutoTraffic();
+  refreshSecurity();
+  refreshProactiveCongestion();
+  refreshFlows();
+}
+
+// ══════════════════════════════════════════════════════════════════════════
+//  INTELLIGENCE PAGE
+// ══════════════════════════════════════════════════════════════════════════
+
+function refreshIntelligence() {
+  // KPIs
+  fetch('/api/kpis').then(r=>r.json()).then(d=>{
+    function _kpiColor(pass){ return pass ? 'var(--green)' : 'var(--red)'; }
+    function _kpiLabel(pass){ return pass ? '✅' : '❌'; }
+
+    const conv = d.convergence_time_ms || {};
+    const gain = d.throughput_gain_pct || {};
+    const eff  = d.security_efficacy_pct || {};
+    const slo  = d.slo_staff_lan || {};
+
+    if($('#kpiConv'))  { $('#kpiConv').textContent  = conv.value != null ? conv.value+'ms' : '—';   $('#kpiConv').style.color  = _kpiColor(conv.pass); }
+    if($('#kpiGain'))  { $('#kpiGain').textContent  = gain.value != null ? gain.value+'%' : '—';    $('#kpiGain').style.color  = _kpiColor(gain.pass); }
+    if($('#kpiEff'))   { $('#kpiEff').textContent   = eff.value  != null ? eff.value+'%'  : '—';    $('#kpiEff').style.color   = _kpiColor(eff.pass);  }
+    if($('#kpiSLO'))   { $('#kpiSLO').textContent   = slo.value  != null ? slo.value+'ms' : '—';    $('#kpiSLO').style.color   = _kpiColor(slo.pass);  }
+  }).catch(()=>{});
+
+  // Traffic Profile Matrix
+  fetch('/api/traffic_profile').then(r=>r.json()).then(d=>{
+    const rows = d.matrix || [];
+    const m = _read_metrics_cache();
+    const zm = m.zone_metrics || {};
+    const body = rows.map(row=>{
+      const util = (zm[row.zone_key]||{}).max_utilization_pct || 0;
+      const utilColor = util>70?'var(--red)':util>50?'var(--amber)':'var(--green)';
+      const priColor  = row.priority===1?'var(--red)':row.priority===2?'var(--amber)':'var(--dim)';
+      return `<tr>
+        <td><b>${row.zone}</b></td>
+        <td><span style="color:var(--cyan)">VLAN ${row.vlan}</span></td>
+        <td><span style="color:${priColor};font-weight:700">P${row.priority}</span></td>
+        <td style="font-size:11px">${row.bandwidth_target}</td>
+        <td style="font-size:11px">${row.performance_target}</td>
+        <td style="font-size:10px;color:var(--dim)">${row.security}</td>
+        <td><span style="color:${utilColor};font-weight:700">${util.toFixed(1)}%</span></td>
+      </tr>`;
+    }).join('');
+    $('#trafProfileBody').innerHTML = body || '<tr><td colspan="7" style="color:var(--dim)">No data</td></tr>';
+  }).catch(()=>{});
+
+  // Gap Analysis
+  fetch('/api/gap_analysis').then(r=>r.json()).then(d=>{
+    const rows = d.comparison || [];
+    if($('#gapSummaryBadge')) $('#gapSummaryBadge').textContent =
+      d.improvement_pct != null ? `${d.improvement_pct}% metrics improved (${d.improvements}/${d.total_metrics})` : '';
+    const body = rows.map(row=>{
+      const better  = row.better;
+      const delta   = typeof row.delta_pct === 'number' ? (row.delta_pct>0?'+':'')+row.delta_pct+'%' : String(row.delta_pct||'');
+      const dColor  = better ? 'var(--green)' : 'var(--red)';
+      const badge   = better ? '<span style="color:var(--green)">✅ Improved</span>' : '<span style="color:var(--red)">❌ Below target</span>';
+      return `<tr>
+        <td><b style="font-size:11px">${row.metric}</b><br><span style="color:var(--dim);font-size:9px">${row.unit}</span></td>
+        <td style="color:var(--amber);font-size:11px">${row.legacy}</td>
+        <td style="color:var(--green);font-size:11px">${row.intelligent}</td>
+        <td style="color:${dColor};font-weight:700;font-size:11px">${delta}</td>
+        <td>${badge}</td>
+      </tr>`;
+    }).join('');
+    $('#gapBody').innerHTML = body || '<tr><td colspan="5" style="color:var(--dim)">No data</td></tr>';
+  }).catch(()=>{});
+
+  // K-Means Clusters
+  fetch('/api/clusters').then(r=>r.json()).then(d=>{
+    if(d.status === 'insufficient_data') {
+      $('#clusterList').innerHTML = '<span style="color:var(--dim);font-size:12px">Collecting data... ('+(d.samples||0)+' samples so far)</span>';
+      if($('#clusterInfo')) $('#clusterInfo').textContent = 'Need 8+ samples';
+      return;
+    }
+    const clusters = d.clusters || [];
+    if($('#clusterInfo')) $('#clusterInfo').textContent = `${clusters.length} profiles · ${d.samples} samples`;
+    const colors = ['var(--accent)','var(--green)','var(--amber)','var(--purple)'];
+    $('#clusterList').innerHTML = clusters.map((c,i)=>`
+      <div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;border-left:3px solid ${colors[i%4]}">
+        <div style="font-size:12px;font-weight:700;color:${colors[i%4]}">${c.label}</div>
+        <div style="font-size:11px;color:var(--dim);margin:3px 0">${c.pct_of_time}% of observed time (${c.member_count} samples)</div>
+        <div style="font-size:11px">${Object.entries(c.centroid_util||{}).map(([z,v])=>
+          `<span style="color:var(--dim)">${z.replace(/_/g,' ')}: </span><b>${v}%</b>`).join('  ')}</div>
+        <div style="font-size:10px;color:var(--amber);margin-top:4px">${c.recommendation}</div>
+      </div>`).join('') || '<span style="color:var(--dim)">No clusters yet</span>';
+  }).catch(()=>{});
+
+  // Time-Series
+  fetch('/api/timeseries').then(r=>r.json()).then(d=>{
+    if(d.status==='insufficient_data'){
+      $('#tsList').innerHTML='<span style="color:var(--dim);font-size:12px">Collecting samples... ('+d.samples+' so far)</span>';
+      if($('#tsInfo')) $('#tsInfo').textContent='Need 5+ samples';
+      return;
+    }
+    const zones = d.zones || {};
+    const overall = d.overall || {};
+    if($('#tsInfo')) $('#tsInfo').textContent = `${overall.samples_analysed||0} samples · ${overall.time_window_min||0}min window`;
+    const trendIcon = t => t==='rising'?'↑':t==='falling'?'↓':'→';
+    const trendColor = t => t==='rising'?'var(--red)':t==='falling'?'var(--green)':'var(--dim)';
+    $('#tsList').innerHTML = Object.entries(zones).map(([zone,z])=>`
+      <div style="padding:8px 0;border-bottom:1px solid rgba(42,53,85,.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <b style="font-size:12px">${zone.replace(/_/g,' ')}</b>
+          <span style="color:${trendColor(z.trend_direction)};font-size:13px;font-weight:700">${trendIcon(z.trend_direction)} ${z.trend_direction}</span>
+        </div>
+        <div style="font-size:11px;color:var(--dim)">Peak: <b style="color:var(--txt)">${z.peak_utilization_pct}%</b> @ ${z.peak_time_str}
+          · Avg: ${z.avg_utilization_pct}%
+          · Crossings: <span style="${z.buffer_limit_crossings>0?'color:var(--red)':''}">${z.buffer_limit_crossings}</span></div>
+        <div style="font-size:10px;color:var(--amber);margin-top:2px">${z.recommendation}</div>
+      </div>`).join('') || '<span style="color:var(--dim)">No data</span>';
+  }).catch(()=>{});
+
+  // MARL — DQN Traffic Agent
+  fetch('/api/ml_action').then(r=>r.json()).then(d=>{
+    if(!d || !d.ts) return;
+    const pane = $('#marlDqnPane');
+    if(!pane) return;
+    pane.textContent = [
+      `Action : ${d.action || d.action_name || '—'}`,
+      `Reward : ${(d.reward||0).toFixed(3)}`,
+      `Epsilon: ${(d.epsilon||0).toFixed(4)}`,
+      `Steps  : ${d.steps || d.episode || 0}`,
+      `Period : ${d.period || '—'}`,
+      `IBN    : ${d.ibn ? 'override' : 'autonomous'}`,
+      '',
+      'Top Q-values:',
+      ...Object.entries(d.q_values||{}).sort((a,b)=>b[1]-a[1]).slice(0,5)
+               .map(([k,v])=>`  ${k}: ${v}`),
+    ].join('\n');
+  }).catch(()=>{});
+
+  // MARL — Security Agent
+  fetch('/api/marl_security').then(r=>r.json()).then(d=>{
+    if(!d || !d.ts) { if($('#marlSecPane')) $('#marlSecPane').textContent='Agent not running — start marl_security_agent.py'; return; }
+    const pane = $('#marlSecPane');
+    if(!pane) return;
+    const xai = d.explanation || {};
+    pane.textContent = [
+      `Action   : ${d.action}`,
+      `Threat   : ${d.threat_level}`,
+      `Reward   : ${(d.reward||0).toFixed(2)}`,
+      `Avg(50)  : ${(d.avg_reward_50||0).toFixed(2)}`,
+      `Epsilon  : ${(d.epsilon||0).toFixed(4)}`,
+      `Steps    : ${d.steps}`,
+      `Q-states : ${d.qtable_states}`,
+      '',
+      `Cooperates with DQN: ${d.cooperate_with_dqn||'—'}`,
+      '',
+      'Top Features:',
+      ...(xai.top_features||[]).map(f=>`  ${f.feature}: ${f.value}`),
+      '',
+      xai.action_rationale||'',
+    ].join('\n');
+  }).catch(()=>{});
+}
+
+// Small cache so Traffic Profile Matrix can show live utilisation
+function _read_metrics_cache(){ return _metricsCache; }
+
+// ══════════════════════════════════════════════════════════════════════════
+//  IBN PAGE
+// ══════════════════════════════════════════════════════════════════════════
+
+function refreshIBN() {
+  fetch('/api/ibn/intents').then(r=>r.json()).then(d=>{
+    const intents = d.active_intents || [];
+    if($('#ibnActiveCount')) $('#ibnActiveCount').textContent = intents.length;
+    if($('#ibnTotal'))       $('#ibnTotal').textContent       = d.total_submitted || 0;
+    if($('#ibnStatus'))      $('#ibnStatus').textContent      = intents.length ? '● Active' : '○ Idle';
+    if($('#ibnCurAction'))   $('#ibnCurAction').textContent   = intents.length ? intents[0].action : 'normal';
+
+    const list = $('#ibnIntentList');
+    if(list) {
+      if(!intents.length){
+        list.innerHTML='<span style="font-size:12px;color:var(--dim)">No active intents.</span>';
+      } else {
+        list.innerHTML = intents.map(i=>{
+          const exp = i.expires ? new Date(i.expires*1000).toLocaleTimeString() : '∞';
+          return `<div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:6px;border-left:3px solid var(--accent)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <b style="font-size:12px;color:var(--accent)">${i.id}</b>
+              <button onclick="cancelIntent('${i.id}')" style="font-size:10px;padding:2px 8px;border-radius:6px;border:1px solid var(--red);background:rgba(239,68,68,.1);color:var(--red);cursor:pointer">Cancel</button>
+            </div>
+            <div style="font-size:12px;margin:3px 0">"${i.text}"</div>
+            <div style="font-size:11px;color:var(--dim)">Action: <b style="color:var(--txt)">${i.action}</b> · Expires: ${exp} · Source: ${i.source}</div>
+            <div style="font-size:10px;color:var(--dim);margin-top:2px">${i.description}</div>
+          </div>`;
+        }).join('');
+      }
+    }
+  }).catch(()=>{});
+
+  // Action catalogue
+  fetch('/api/ibn/actions').then(r=>r.json()).then(d=>{
+    const actions = d.actions || [];
+    const body = $('#ibnCatalogueBody');
+    if(body) body.innerHTML = actions.map(a=>`<tr>
+      <td style="font-family:monospace;color:var(--accent)">${a.intent_id}</td>
+      <td style="font-family:monospace;color:var(--green)">${a.action}</td>
+      <td style="font-size:11px">${a.description}</td>
+    </tr>`).join('');
+  }).catch(()=>{});
+}
+
+function submitIntent(text) {
+  if(!text) return;
+  const dur = parseInt($('#ibnDuration').value || '3600');
+  fetch('/api/ibn/intent', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({text, duration_s: dur})
+  }).then(r=>r.json()).then(d=>{
+    const log = $('#ibnLog');
+    if(log) log.textContent = d.ok
+      ? `✅ ${d.message}`
+      : `❌ ${d.error}\n${d.hint||''}`;
+    refreshIBN();
+  }).catch(e=>{ if($('#ibnLog')) $('#ibnLog').textContent = 'Error: '+e; });
+}
+
+function cancelIntent(id) {
+  fetch(`/api/ibn/cancel/${id}`, {method:'DELETE'})
+    .then(r=>r.json()).then(d=>{
+      if($('#ibnLog')) $('#ibnLog').textContent = d.ok ? `✅ Cancelled ${id}` : `❌ ${d.error}`;
+      refreshIBN();
+    }).catch(()=>{});
+}
+
+// Quick-intent buttons (ibn-btn class — no conflict with traffic scenario-btn)
+document.querySelectorAll('.ibn-btn[data-intent]').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const txt = btn.dataset.intent;
+    if($('#ibnTextInput')) $('#ibnTextInput').value = txt;
+    btn.classList.add('fired');
+    setTimeout(()=>btn.classList.remove('fired'), 2000);
+    submitIntent(txt);
+  });
+});
+
+$('#btnIbnSubmit').addEventListener('click', ()=>{
+  submitIntent(($('#ibnTextInput').value||'').trim());
+});
+$('#ibnTextInput').addEventListener('keydown', e=>{
+  if(e.key === 'Enter') submitIntent(($('#ibnTextInput').value||'').trim());
+});
+$('#btnIbnRefresh').addEventListener('click', refreshIBN);
+
+// ══ Ping All ══════════════════════════════════════════════════════════════════
+$('#btnPingall').addEventListener('click', () => {
+  $('#btnPingall').textContent = '⏳ Pinging...';
+  $('#btnPingall').disabled = true;
+  fetch('/api/pingall', {method:'POST'})
+    .then(r=>r.json()).then(d=>{
+      $('#btnPingall').textContent = 'Ping All';
+      $('#btnPingall').disabled = false;
+      const note = d.simulated ? ' (simulated)' : '';
+      const msg = `Ping All${note}\nPacket Loss: ${d.packet_loss_pct}%\nPairs tested: ${(d.pairs||[]).length}\n\n`
+        + (d.pairs||[]).slice(0,8).map(p=>`${p.src} → ${p.dst}: ${p.rtt_ms}ms, ${p.loss_pct}% loss`).join('\n');
+      alert(msg);
+    }).catch(e=>{
+      $('#btnPingall').textContent = 'Ping All';
+      $('#btnPingall').disabled = false;
+      alert('Ping failed: '+e);
+    });
+});
+
+// ══ Run All Demo ══════════════════════════════════════════════════════════════
+function runAllDemo(mode) {
+  const log = document.getElementById('runAllLog');
+  if (log) log.textContent = `Launching '${mode}' demo... please wait.\n`;
+  fetch('/api/run_all_demo', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({mode})
+  }).then(r=>r.json()).then(d=>{
+    let txt = `✅ ${d.message}\n\n`;
+    txt += '── Traffic Scenarios ──\n';
+    Object.entries(d.scenarios||{}).forEach(([sc,r])=>{
+      txt += `  ${sc}: ${r.ok ? '✓ started ('+r.duration_s+'s)' : '✗ '+r.error}\n`;
+    });
+    txt += '\n── IBN Intents ──\n';
+    Object.entries(d.intents||{}).forEach(([it,r])=>{
+      txt += `  "${it}": ${r.ok ? '✓ '+r.action : '✗ '+(r.error||'conflict')}\n`;
+    });
+    txt += '\nWatch the Overview & Analytics pages for AI reactions.';
+    if (log) log.textContent = txt;
+    // Trigger immediate refresh of all panels
+    setTimeout(()=>{ refresh(); refreshAlerts(); refreshIBN(); refreshIntelligence(); refreshSecurity(); refreshProblemCoverage(); }, 1500);
+  }).catch(e=>{ if(log) log.textContent = 'Error: '+e; });
+}
+
+document.getElementById('btnRunAll').addEventListener('click', ()=>{
+  document.getElementById('runAllModal').style.display = 'flex';
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+//  Hook metrics cache update into main refresh
+// ══ Problem Statement Coverage ═══════════════════════════════════════════════
+function toggleProblemPanel() {
+  const body = document.getElementById('problemCoverageBody');
+  if (!body) return;
+  body.style.display = body.style.display === 'none' ? '' : 'none';
+}
+
+function refreshProblemCoverage() {
+  fetch('/api/problem_coverage').then(r=>r.json()).then(data=>{
+    const grid = document.getElementById('problemGrid');
+    const badge = document.getElementById('pCovBadge');
+    const ts = document.getElementById('pCovTs');
+    if (!grid) return;
+    const probs = data.problems || [];
+    const live_count = probs.filter(p=>p.live).length;
+    if (badge) {
+      badge.textContent = live_count + ' / ' + probs.length;
+      badge.style.background = live_count === probs.length ? 'var(--green)' : live_count >= 8 ? 'var(--amber)' : 'var(--red)';
+    }
+    grid.innerHTML = probs.map(p => {
+      const dot = p.live ? '<span style="color:var(--green);font-size:14px">●</span>' : '<span style="color:var(--amber);font-size:14px">○</span>';
+      const chips = (p.components||[]).map(c=>`<span style="display:inline-block;background:rgba(255,255,255,0.07);border-radius:4px;padding:1px 6px;font-size:10px;margin:1px">${c}</span>`).join('');
+      return `<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:10px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          ${dot}
+          <span style="font-size:11px;font-weight:700;color:var(--dim)">${p.id}</span>
+          <span style="font-size:12px;font-weight:600">${p.title}</span>
+        </div>
+        <div style="margin-bottom:5px;line-height:1.5">${chips}</div>
+        <div style="font-size:10px;color:var(--dim);font-style:italic">${p.evidence}</div>
+      </div>`;
+    }).join('');
+    if (ts) ts.textContent = 'Last updated: ' + new Date(data.timestamp*1000).toLocaleTimeString();
+  }).catch(()=>{});
+}
+
+setInterval(refreshIntelligence, 8000);
+setInterval(refreshIBN, 5000);
+setInterval(refreshProblemCoverage, 12000);
+activatePage(initialPage());
+bootDashboard();
+refreshIntelligence();
+refreshIBN();
+refreshProblemCoverage();
+
+$('#btnRefresh').addEventListener('click', () => { refresh(); refreshAlerts(); refreshHistory(); refreshSecurity(); refreshFlows(); refreshIntelligence(); refreshIBN(); refreshProblemCoverage(); });
+
+</script>
+</body>
+</html>

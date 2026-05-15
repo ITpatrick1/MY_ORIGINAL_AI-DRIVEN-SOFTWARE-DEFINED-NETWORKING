@@ -19,7 +19,7 @@ Zone mapping:
 
 All switches run OVS with OpenFlow 1.3.
 DS1-DS2 inter-link = 1000 Mbps (redundant path for self-healing).
-Each Access Switch uplink = 100 Mbps.
+Each Access Switch uplink = 1000 Mbps.
 """
 
 import os
@@ -39,6 +39,137 @@ from mininet.node import OVSSwitch, RemoteController
 from mininet.link import TCLink
 from mininet.log import setLogLevel, info, error
 from mininet.cli import CLI
+from tumba_sdn.common.campus_core import (
+    atomic_write_json,
+    deterministic_mac,
+    external_zone_metadata,
+    load_external_vm_hosts,
+)
+
+
+def build_static_topology_state():
+    nodes = []
+    links = []
+
+    switch_specs = [
+        ('cs1', 'Core Switch', '0000000000000001'),
+        ('ds1', 'Distribution Switch 1', '0000000000000002'),
+        ('ds2', 'Distribution Switch 2', '0000000000000003'),
+        ('as1', 'Staff LAN Switch', '0000000000000004'),
+        ('as2', 'Server Zone Switch', '0000000000000005'),
+        ('as3', 'IT Lab Switch', '0000000000000006'),
+        ('as4', 'Student WiFi Switch', '0000000000000007'),
+    ]
+    for switch_id, label, dpid in switch_specs:
+        nodes.append({'id': switch_id, 'type': 'switch', 'dpid': dpid, 'label': label})
+
+    zone_specs = {
+        'staff_lan': ('h_staff', '10.10.0', 6, 'as1', lambda i: f'Staff PC {i}'),
+        'server_zone': ('h_srv', '10.20.0', 4, 'as2', lambda i: {1: 'MIS Server', 2: 'DHCP Server', 3: 'Auth Server', 4: 'Moodle Server'}[i]),
+        'it_lab': ('h_lab', '10.30.0', 4, 'as3', lambda i: f'Lab PC {i}'),
+        'student_wifi': ('h_wifi', '10.40.0', 10, 'as4', lambda i: f'WiFi Device {i}'),
+    }
+    server_names = {1: 'h_mis', 2: 'h_dhcp', 3: 'h_auth', 4: 'h_moodle'}
+    for zone, (prefix, subnet, count, switch, label_fn) in zone_specs.items():
+        for i in range(1, count + 1):
+            host_id = server_names[i] if zone == 'server_zone' else f'{prefix}{i}'
+            ip = f'{subnet}.{i}'
+            nodes.append({
+                'id': host_id,
+                'type': 'host',
+                'ip': ip,
+                'mac': deterministic_mac(ip),
+                'zone': zone,
+                'label': label_fn(i),
+            })
+            links.append({
+                'src': host_id,
+                'dst': switch,
+                'src_intf': f'{host_id}-eth0',
+                'dst_intf': f'{switch}-eth{i}',
+                'bw_mbps': 100,
+            })
+
+    for src, dst in [('cs1', 'ds1'), ('cs1', 'ds2'), ('ds1', 'ds2'), ('ds1', 'as1'), ('ds1', 'as2'), ('ds2', 'as3'), ('ds2', 'as4')]:
+        links.append({
+            'src': src,
+            'dst': dst,
+            'src_intf': f'{src}-{dst}',
+            'dst_intf': f'{dst}-{src}',
+            'bw_mbps': 1000,
+        })
+
+    _append_external_vm_nodes(nodes, links)
+
+    return {'ts': time.time(), 'nodes': nodes, 'links': links, 'mode': 'static_fallback'}
+
+
+def _append_external_vm_nodes(nodes: list, links: list):
+    zone = external_zone_metadata()
+    hosts = load_external_vm_hosts()
+    if not zone or not hosts:
+        return
+    switch_id = zone.get('switch', 'ovs_ext')
+    dpid = int(zone.get('dpid', 8) or 8)
+    distribution = zone.get('distribution', 'ds2')
+    if not any(n.get('id') == switch_id for n in nodes):
+        nodes.append({
+            'id': switch_id,
+            'type': 'switch',
+            'dpid': f'{dpid:016x}',
+            'label': f"{zone.get('label', 'External VMware')} OVS Bridge",
+            'external': True,
+        })
+    if not any({link.get('src'), link.get('dst')} == {switch_id, distribution} for link in links):
+        links.append({
+            'src': distribution,
+            'dst': switch_id,
+            'src_intf': f'{distribution}-{switch_id}',
+            'dst_intf': f'{switch_id}-{distribution}',
+            'bw_mbps': float(zone.get('capacity_mbps', 1000) or 1000),
+            'external': True,
+        })
+    for host_id, meta in hosts.items():
+        if not any(n.get('id') == host_id for n in nodes):
+            nodes.append({
+                'id': host_id,
+                'type': 'host',
+                'ip': meta.get('ip', ''),
+                'mac': meta.get('mac') or deterministic_mac(meta.get('ip', '')),
+                'zone': meta.get('zone', zone.get('key', 'external_vm')),
+                'label': meta.get('label', host_id),
+                'external': True,
+            })
+        if not any({link.get('src'), link.get('dst')} == {host_id, switch_id} for link in links):
+            links.append({
+                'src': host_id,
+                'dst': switch_id,
+                'src_intf': f'{host_id}-eth0',
+                'dst_intf': f"{switch_id}-{host_id}",
+                'bw_mbps': float(meta.get('link_capacity_mbps', 100) or 100),
+                'external': True,
+            })
+
+
+class StaticTopologyRuntime:
+    mode = 'static_fallback'
+
+    def __init__(self):
+        self.net = None
+        self.topology_state = {}
+        self._update_topology_state()
+
+    def _update_topology_state(self):
+        self.topology_state = build_static_topology_state()
+        state_file = os.environ.get('CAMPUS_TOPOLOGY_STATE_FILE', '/tmp/campus_topology_state.json')
+        atomic_write_json(state_file, self.topology_state)
+
+    def run_pingall(self):
+        return {
+            'ok': False,
+            'mode': self.mode,
+            'error': 'Mininet topology unavailable in static fallback mode',
+        }
 
 
 class TumbaCollegeTopo:
@@ -108,11 +239,11 @@ class TumbaCollegeTopo:
         # ─── DS1-DS2 Redundant Inter-link (1 Gbps for self-healing) ───
         self.net.addLink(ds1, ds2, bw=1000, delay='1ms')
 
-        # ─── Distribution-to-Access links (100 Mbps each) ───
-        self.net.addLink(ds1, as1, bw=100, delay='2ms')   # DS1 → Staff LAN
-        self.net.addLink(ds1, as2, bw=100, delay='2ms')   # DS1 → Server Zone
-        self.net.addLink(ds2, as3, bw=100, delay='2ms')   # DS2 → IT Lab
-        self.net.addLink(ds2, as4, bw=100, delay='2ms')   # DS2 → Student WiFi
+        # ─── Distribution-to-Access links (1 Gbps each) ───
+        self.net.addLink(ds1, as1, bw=1000, delay='2ms')   # DS1 → Staff LAN
+        self.net.addLink(ds1, as2, bw=1000, delay='2ms')   # DS1 → Server Zone
+        self.net.addLink(ds2, as3, bw=1000, delay='2ms')   # DS2 → IT Lab
+        self.net.addLink(ds2, as4, bw=1000, delay='2ms')   # DS2 → Student WiFi
 
         # ─── Add hosts per zone ───
         for zone_name, zone_cfg in self.ZONES.items():
@@ -130,8 +261,8 @@ class TumbaCollegeTopo:
                     defaultRoute=f"via {zone_cfg['subnet']}.254",
                 )
                 self.hosts[host_name] = host
-                # Host-to-access-switch link (10 Mbps for WiFi, 100 Mbps for others)
-                host_bw = 10 if zone_name == 'student_wifi' else 100
+                # Host-to-access-switch link: 100 Mbps for all campus endpoints
+                host_bw = 100
                 self.net.addLink(host, switch, bw=host_bw, delay='1ms')
 
         return self.net
@@ -233,14 +364,12 @@ class TumbaCollegeTopo:
             'nodes': nodes,
             'links': links,
         }
+        _append_external_vm_nodes(nodes, links)
 
         # Write state file for dashboard
         state_file = os.environ.get('CAMPUS_TOPOLOGY_STATE_FILE', '/tmp/campus_topology_state.json')
         try:
-            tmp = state_file + '.tmp'
-            with open(tmp, 'w') as f:
-                json.dump(self.topology_state, f, indent=2)
-            os.replace(tmp, state_file)
+            atomic_write_json(state_file, self.topology_state)
         except Exception as e:
             error(f'Failed to write topology state: {e}\n')
 
@@ -363,8 +492,12 @@ class TopologyRuntimeAPI:
 
             def do_GET(self):
                 if self.path == '/health':
-                    self._send_json({'ok': True, 'service': 'topology_runtime'})
-                elif self.path == '/topology':
+                    self._send_json({
+                        'ok': True,
+                        'service': 'topology_runtime',
+                        'mode': getattr(self._topo, 'mode', 'live'),
+                    })
+                elif self.path in ('/topology', '/api/topology'):
                     self._topo._update_topology_state()
                     self._send_json(self._topo.topology_state)
                 else:
@@ -375,6 +508,9 @@ class TopologyRuntimeAPI:
                     result = self._topo.run_pingall()
                     self._send_json(result)
                 elif self.path == '/link_down':
+                    if not getattr(self._topo, 'net', None):
+                        self._send_json({'ok': False, 'error': 'Topology control unavailable in static fallback mode'}, 409)
+                        return
                     body = self._read_body()
                     src = body.get('src', 'ds1')
                     dst = body.get('dst', 'cs1')
@@ -394,6 +530,9 @@ class TopologyRuntimeAPI:
                     except Exception as e:
                         self._send_json({'ok': False, 'error': str(e)}, 500)
                 elif self.path == '/link_up':
+                    if not getattr(self._topo, 'net', None):
+                        self._send_json({'ok': False, 'error': 'Topology control unavailable in static fallback mode'}, 409)
+                        return
                     body = self._read_body()
                     src = body.get('src', 'ds1')
                     dst = body.get('dst', 'cs1')
@@ -433,9 +572,22 @@ def main():
     parser.add_argument('--controller-port', type=int, default=6653)
     parser.add_argument('--api-port', type=int, default=9091)
     parser.add_argument('--no-cli', action='store_true')
+    parser.add_argument('--api-only', action='store_true')
     args = parser.parse_args()
 
     setLogLevel('info')
+
+    if args.api_only or os.geteuid() != 0:
+        info('*** Starting topology API in static fallback mode (Mininet requires root)\n')
+        topo = StaticTopologyRuntime()
+        api = TopologyRuntimeAPI(topo, port=args.api_port)
+        api.start()
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            pass
+        return
 
     topo = TumbaCollegeTopo(
         controller_ip=args.controller_ip,

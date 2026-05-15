@@ -1,0 +1,68 @@
+{
+  "security": {
+    "ok": true,
+    "kind": "security",
+    "rows": 1000,
+    "accuracy": 0.998,
+    "labels": [
+      "blocked",
+      "ddos",
+      "exploits",
+      "fuzzers",
+      "normal",
+      "ping_sweep",
+      "port_scan",
+      "unauthorized_access"
+    ],
+    "predictions": [
+      "blocked",
+      "ddos",
+      "exploits",
+      "fuzzers",
+      "normal",
+      "ping_sweep",
+      "port_scan",
+      "unauthorized_access"
+    ]
+  },
+  "congestion": {
+    "ok": true,
+    "kind": "congestion",
+    "rows": 1000,
+    "accuracy": 1.0,
+    "labels": [
+      "critical",
+      "healthy",
+      "preventive",
+      "warning"
+    ],
+    "predictions": [
+      "critical",
+      "healthy",
+      "preventive",
+      "warning"
+    ]
+  },
+  "qos": {
+    "ok": true,
+    "kind": "qos",
+    "rows": 861,
+    "accuracy": 0.9884,
+    "labels": [
+      "blocked",
+      "critical_exam",
+      "high_priority",
+      "low_priority",
+      "medium_priority",
+      "throttled"
+    ],
+    "predictions": [
+      "blocked",
+      "critical_exam",
+      "high_priority",
+      "low_priority",
+      "medium_priority",
+      "throttled"
+    ]
+  }
+}

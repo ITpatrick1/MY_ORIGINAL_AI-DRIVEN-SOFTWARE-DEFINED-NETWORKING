@@ -74,6 +74,7 @@ tumba-college-sdn/
 | Server Zone | 20 | 10.20.0.0/24 | as2 (dpid 5) |
 | IT Lab | 30 | 10.30.0.0/24 | as3 (dpid 6) |
 | Student WiFi | 40 | 10.40.0.0/24 | as4 (dpid 7) |
+| External VMware | 50 | 10.50.0.0/24 | ovs_ext (dpid 8) |
 
 ---
 
@@ -128,3 +129,21 @@ Pre-built scenarios: **Canonical Demo**, **Staff Heavy**, **Security Test**, **C
 - **DQN (PyTorch)** — Reinforcement learning routing agent
 - **Flask + SocketIO** — Real-time web dashboard
 - **iperf3** — Traffic generation per host namespace
+
+---
+
+## External VMware VM Support
+
+The stack now includes a configurable VMware endpoint zone in
+`tumba_sdn/config/external_vms.json`. The default endpoint is:
+
+```text
+Host: ext_win10
+IP:   10.50.0.10
+OVS:  ovs_ext, DPID 8
+```
+
+Ryu can control this Windows VM's traffic when the VM is connected through an
+Open vSwitch bridge pointed at the Ryu controller. See
+`docs/vmware_external_vm_integration.md` and
+`scripts/setup_vmware_ovs_bridge.sh`.

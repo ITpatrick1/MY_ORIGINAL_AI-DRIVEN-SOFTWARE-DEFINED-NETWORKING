@@ -35,11 +35,14 @@ import random
 import time
 from collections import deque
 
+from tumba_sdn.common.campus_core import active_zone_subnets, atomic_write_json, configure_file_logger, read_json
+
 METRICS_FILE   = os.environ.get('CAMPUS_METRICS_FILE',   '/tmp/campus_metrics.json')
 SEC_OUT_FILE   = os.environ.get('CAMPUS_SEC_ACTION_FILE','/tmp/campus_security_action.json')
 ML_ACTION_FILE = os.environ.get('CAMPUS_ML_ACTION_FILE', '/tmp/campus_ml_action.json')
+LOGGER = configure_file_logger('tumba.marl_security', 'marl_security.log')
 
-ZONES = ['staff_lan', 'server_zone', 'it_lab', 'student_wifi']
+ZONES = list(active_zone_subnets())
 
 SECURITY_ACTIONS = [
     'monitor_only',
@@ -59,18 +62,11 @@ BLOCK_IP_MAX   = 10.0
 
 
 def _read(path: str) -> dict:
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    return read_json(path, {})
 
 
 def _write(path: str, data: dict) -> None:
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, path)
+    atomic_write_json(path, data, logger=LOGGER, label='marl_security')
 
 
 def _sf(v, d=0.0) -> float:
@@ -225,13 +221,45 @@ class SecurityAgent:
             ),
         }
 
+    def _controller_decision(self, metrics: dict, action_name: str, explanation: dict) -> dict:
+        scans = metrics.get('active_scans', [])
+        target_ip = scans[0].get('src_ip', '') if scans else ''
+        if metrics.get('ddos_active'):
+            controller_action = 'isolate'
+            reason = 'DDoS active on campus edge'
+        elif action_name in ('block_src_ip',) and target_ip:
+            controller_action = 'block'
+            reason = 'Specific attacker source identified'
+        elif action_name in ('isolate_wifi', 'emergency_lockdown'):
+            controller_action = 'drop_to_server_vlan'
+            reason = 'Zero-Trust restriction for suspicious WiFi activity'
+        elif action_name == 'quarantine_lab':
+            controller_action = 'quarantine'
+            reason = 'Threat observed from IT lab segment'
+        elif action_name == 'rate_limit_wifi':
+            controller_action = 'rate_limit'
+            reason = 'Threat traffic should be constrained before full isolation'
+        elif action_name == 'restore_normal':
+            controller_action = 'restore_after_timeout'
+            reason = 'Threat indicators cleared'
+        elif action_name == 'monitor_only':
+            controller_action = 'monitor'
+            reason = 'No confident threat signature yet'
+        else:
+            controller_action = 'allow'
+            reason = explanation.get('action_rationale', 'Traffic allowed')
+
+        return {
+            'controller_action': controller_action,
+            'target_ip': target_ip,
+            'reason': reason,
+            'confidence': min(0.99, max(0.1, 0.35 + (0.4 if metrics.get('ddos_active') else 0.0) + len(scans) * 0.05)),
+        }
+
     # ── Main loop ───────────────────────────────────────────────────────────
 
     def run(self, interval: float = 3.0, max_steps: int = 0) -> None:
-        print("MARL Security Agent started")
-        print(f"  metrics : {METRICS_FILE}")
-        print(f"  output  : {SEC_OUT_FILE}")
-        print(f"  actions : {SECURITY_ACTIONS}")
+        LOGGER.info('startup metrics=%s output=%s actions=%s', METRICS_FILE, SEC_OUT_FILE, ','.join(SECURITY_ACTIONS))
 
         loops = 0
         while True:
@@ -262,6 +290,7 @@ class SecurityAgent:
             action_name = SECURITY_ACTIONS[action_idx]
             q_values    = self._get_q(state_key)
             explanation = self._explain(raw, action_name)
+            controller = self._controller_decision(metrics, action_name, explanation)
 
             avg50 = (sum(self.episode_rewards[-50:]) /
                      max(1, len(self.episode_rewards[-50:])))
@@ -283,20 +312,22 @@ class SecurityAgent:
                 'explanation':  explanation,
                 'threat_level': explanation['threat_assessment'],
                 'cooperate_with_dqn': _read(ML_ACTION_FILE).get('action', 'unknown'),
+                **controller,
             }
 
             _write(SEC_OUT_FILE, payload)
 
             if self.steps % 10 == 0:
-                print(f"[SEC] step={self.steps} action={action_name} "
-                      f"reward={reward:.1f} avg50={avg50:.1f} "
-                      f"ε={self.epsilon:.4f} states={len(self.qtable)}")
+                LOGGER.info(
+                    'step=%s action=%s controller=%s reward=%.1f avg50=%.1f epsilon=%.4f states=%s',
+                    self.steps, action_name, controller['controller_action'], reward, avg50, self.epsilon, len(self.qtable),
+                )
 
             if max_steps and loops >= max_steps:
                 break
             time.sleep(interval)
 
-        print("MARL Security Agent stopped.")
+        LOGGER.info('shutdown')
 
 
 def main() -> None:

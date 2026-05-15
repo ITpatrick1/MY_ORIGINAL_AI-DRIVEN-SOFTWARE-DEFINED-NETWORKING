@@ -1,0 +1,241 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color: #e5edf8;
+  background: #07111f;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(14, 116, 144, 0.2), transparent 30rem),
+    linear-gradient(135deg, #07111f 0%, #0b1728 46%, #101827 100%);
+  color: #e5edf8;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+input,
+select,
+textarea {
+  background-color: #0b1220;
+  border-color: #334155;
+  color: #e5edf8;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+}
+
+button,
+a {
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+.status-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  display: inline-block;
+}
+
+.table-tight th,
+.table-tight td {
+  padding: 0.55rem 0.7rem;
+  white-space: nowrap;
+}
+
+.table-tight tbody tr:nth-child(even) {
+  background: rgba(15, 23, 42, 0.42);
+}
+
+.table-tight th {
+  color: #cbd5e1;
+}
+
+.table-tight td {
+  color: #dbeafe;
+}
+
+/* Professional dark dashboard theme overrides for the existing Tailwind UI. */
+.bg-campus-bg {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(56, 189, 248, 0.14), transparent 26rem),
+    radial-gradient(circle at 90% 10%, rgba(124, 58, 237, 0.13), transparent 24rem),
+    linear-gradient(135deg, #07111f 0%, #0b1728 52%, #101827 100%) !important;
+}
+
+.bg-white,
+.bg-white\/95 {
+  background-color: rgba(15, 27, 45, 0.94) !important;
+}
+
+.bg-slate-50,
+.bg-slate-100 {
+  background-color: rgba(23, 36, 58, 0.92) !important;
+}
+
+.hover\:bg-slate-50:hover,
+.hover\:bg-slate-100:hover,
+.hover\:bg-sky-50:hover {
+  background-color: rgba(14, 116, 144, 0.24) !important;
+}
+
+.border-slate-100,
+.border-slate-200,
+.border-slate-300 {
+  border-color: rgba(125, 211, 252, 0.18) !important;
+}
+
+.divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(125, 211, 252, 0.16) !important;
+}
+
+.text-slate-950,
+.text-slate-900,
+.text-slate-800 {
+  color: #f8fafc !important;
+}
+
+.text-slate-700,
+.text-slate-600 {
+  color: #cbd5e1 !important;
+}
+
+.text-slate-500 {
+  color: #94a3b8 !important;
+}
+
+.bg-emerald-50,
+.bg-green-50 {
+  background-color: rgba(16, 185, 129, 0.16) !important;
+}
+
+.bg-yellow-50 {
+  background-color: rgba(234, 179, 8, 0.18) !important;
+}
+
+.bg-orange-50 {
+  background-color: rgba(249, 115, 22, 0.18) !important;
+}
+
+.bg-red-50 {
+  background-color: rgba(239, 68, 68, 0.17) !important;
+}
+
+.bg-sky-50 {
+  background-color: rgba(14, 165, 233, 0.16) !important;
+}
+
+.bg-violet-50,
+.bg-purple-50 {
+  background-color: rgba(139, 92, 246, 0.17) !important;
+}
+
+.text-emerald-700,
+.text-emerald-800,
+.text-emerald-900 {
+  color: #bbf7d0 !important;
+}
+
+.text-yellow-700,
+.text-yellow-800,
+.text-yellow-900 {
+  color: #fde68a !important;
+}
+
+.text-orange-700,
+.text-orange-800,
+.text-orange-900 {
+  color: #fed7aa !important;
+}
+
+.text-red-700,
+.text-red-800,
+.text-red-900 {
+  color: #fecaca !important;
+}
+
+.text-sky-600,
+.text-sky-700,
+.text-sky-800,
+.text-sky-900 {
+  color: #bae6fd !important;
+}
+
+.text-violet-700,
+.text-violet-800,
+.text-violet-900,
+.text-purple-700,
+.text-purple-800,
+.text-purple-900 {
+  color: #ddd6fe !important;
+}
+
+.border-emerald-200,
+.border-green-200 {
+  border-color: rgba(52, 211, 153, 0.42) !important;
+}
+
+.border-yellow-200 {
+  border-color: rgba(250, 204, 21, 0.42) !important;
+}
+
+.border-orange-200 {
+  border-color: rgba(251, 146, 60, 0.46) !important;
+}
+
+.border-red-200 {
+  border-color: rgba(248, 113, 113, 0.48) !important;
+}
+
+.border-sky-200,
+.border-sky-300 {
+  border-color: rgba(56, 189, 248, 0.44) !important;
+}
+
+.border-violet-200,
+.border-purple-200 {
+  border-color: rgba(167, 139, 250, 0.42) !important;
+}
+
+.shadow-panel {
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.26) !important;
+}
+
+.recharts-cartesian-grid line {
+  stroke: rgba(148, 163, 184, 0.2);
+}
+
+.recharts-text,
+.recharts-legend-item-text {
+  fill: #cbd5e1 !important;
+  color: #cbd5e1 !important;
+}

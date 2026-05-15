@@ -37,15 +37,27 @@ import time
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from tumba_sdn.common.campus_core import atomic_write_json, configure_file_logger
+
 ML_ACTION_FILE = os.environ.get('CAMPUS_ML_ACTION_FILE', '/tmp/campus_ml_action.json')
 TIMETABLE_API  = os.environ.get('CAMPUS_TIMETABLE_API',  'http://127.0.0.1:9096')
 IBN_STATE_FILE = os.environ.get('CAMPUS_IBN_STATE_FILE', '/tmp/campus_ibn_state.json')
 
 DEFAULT_PORT = int(os.environ.get('CAMPUS_IBN_PORT', '9098'))
+LOGGER = configure_file_logger('tumba.ibn', 'ibn_engine.log')
 
 # ── Intent → Action mapping ────────────────────────────────────────────────────
 
 INTENT_RULES: list[dict] = [
+    {
+        'id': 'prioritize_elearning',
+        'patterns': [r'prioriti[sz]e\s*e-?learning', r'e-?learning\s*(first|priority|traffic)',
+                     r'moodle\s*(first|priority)', r'lms\s*(first|priority)'],
+        'action': 'throttle_social_boost_academic',
+        'description': 'Boosts E-learning/Moodle and academic traffic while suppressing entertainment traffic',
+        'policy_hint': 'elearning_priority',
+        'conflicts_with': [],
+    },
     {
         'id': 'prioritize_staff',
         'patterns': [r'prioriti[sz]e staff', r'staff\s*(lan|priority|first)'],
@@ -132,7 +144,8 @@ INTENT_RULES: list[dict] = [
     {
         'id': 'academic_first',
         'patterns': [r'academic\s*first', r'restrict\s*social', r'block\s*social\s*media',
-                     r'prioriti[sz]e\s*academic'],
+                     r'prioriti[sz]e\s*academic', r'reduce\s*streaming',
+                     r'throttle\s*streaming', r'streaming.*congestion'],
         'action': 'throttle_social_boost_academic',
         'description': 'Throttles social media, boosts academic traffic (Moodle, research)',
         'policy_hint': 'academic_priority',
@@ -288,7 +301,7 @@ class IBNState:
                     headers={'Content-Type': 'application/json'})
                 urllib.request.urlopen(req, timeout=5)
             except Exception:
-                pass
+                LOGGER.exception('timetable override failed for intent=%s', intent.get('id'))
 
     @staticmethod
     def _write_action(action: str, source: str) -> None:
@@ -300,13 +313,8 @@ class IBNState:
             'epsilon': 0,
             'ibn':     True,
         }
-        tmp = ML_ACTION_FILE + '.tmp'
-        try:
-            with open(tmp, 'w') as f:
-                json.dump(payload, f, indent=2)
-            os.replace(tmp, ML_ACTION_FILE)
-        except Exception:
-            pass
+        atomic_write_json(ML_ACTION_FILE, payload, logger=LOGGER, label='ibn_ml_action')
+        LOGGER.info('ml action write action=%s source=%s', action, source)
 
     def _persist(self) -> None:
         with self._lock:
@@ -316,13 +324,7 @@ class IBNState:
                 'history_count':  len(self.history),
                 'total_submitted':self._counter,
             }
-        try:
-            tmp = IBN_STATE_FILE + '.tmp'
-            with open(tmp, 'w') as f:
-                json.dump(state, f, indent=2)
-            os.replace(tmp, IBN_STATE_FILE)
-        except Exception:
-            pass
+        atomic_write_json(IBN_STATE_FILE, state, logger=LOGGER, label='ibn_state')
 
 
 # ── HTTP handler ───────────────────────────────────────────────────────────────
@@ -359,16 +361,27 @@ class IBNHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == '/health':
             active = _ibn_state.get_active()
+            LOGGER.info('api health active_intents=%d', len(active))
             self._json({
                 'ok': True, 'service': 'ibn_engine',
                 'active_intents': len(active),
                 'ts': time.time(),
             })
         elif self.path == '/intents':
-            self._json({'intents': _ibn_state.get_active()})
+            LOGGER.info('api intents requested')
+            active = _ibn_state.get_active()
+            self._json({
+                'active_intents': active,
+                'intents': active,
+                'history_count': len(_ibn_state.get_history()),
+                'total_submitted': _ibn_state._counter,
+                'ts': time.time(),
+            })
         elif self.path == '/intents/history':
+            LOGGER.info('api intent history requested')
             self._json({'history': _ibn_state.get_history()})
         elif self.path == '/actions':
+            LOGGER.info('api actions requested count=%d', len(ACTION_CATALOGUE))
             self._json({'actions': ACTION_CATALOGUE, 'count': len(ACTION_CATALOGUE)})
         else:
             self._json({'error': 'not found'}, 404)
@@ -376,13 +389,14 @@ class IBNHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self.path == '/intent':
             body = self._body()
-            text       = body.get('text', '').strip()
+            text       = (body.get('text') or body.get('intent') or body.get('command') or '').strip()
             duration_s = int(body.get('duration_s', 3600))
             source     = body.get('source', 'api')
             if not text:
-                self._json({'ok': False, 'error': 'text field required'}, 400)
+                self._json({'ok': False, 'error': 'text field required', 'accepted_fields': ['text', 'intent', 'command']}, 400)
                 return
             result = _ibn_state.submit(text, duration_s=duration_s, source=source)
+            LOGGER.info('api intent text=%s ok=%s action=%s', text, result.get('ok'), result.get('action'))
             self._json(result, 200 if result.get('ok') else 400)
         else:
             self._json({'error': 'not found'}, 404)
@@ -408,17 +422,16 @@ def main() -> None:
     p.add_argument('--port', type=int, default=DEFAULT_PORT)
     args = p.parse_args()
 
+    _ibn_state._persist()
     threading.Thread(target=_expiry_loop, daemon=True).start()
 
     server = ThreadingHTTPServer(('0.0.0.0', args.port), IBNHandler)
-    print(f"IBN Engine listening on http://0.0.0.0:{args.port}")
-    print(f"  POST /intent  {{\"text\": \"Prioritize Staff LAN\", \"duration_s\": 3600}}")
-    print(f"  GET  /intents — list active intents")
-    print(f"  GET  /actions — list available actions")
+    LOGGER.info('startup host=0.0.0.0 port=%s state_file=%s', args.port, IBN_STATE_FILE)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    LOGGER.info('shutdown')
 
 
 if __name__ == '__main__':

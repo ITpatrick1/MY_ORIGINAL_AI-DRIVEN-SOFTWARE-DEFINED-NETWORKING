@@ -8,3 +8,40 @@ __pycache__/
 .claude/
 *.log
 *.tmp
+*.tsbuildinfo
+node_modules/
+/frontend/
+frontend/dist/
+frontend/.vite/
+tumba_sdn/dashboard/frontend/dist/
+tumba_sdn/dashboard/frontend/.vite/
+.tools/
+
+# Local planning/reference documents that may contain personal project material.
+my document to guiding developer/
+
+# Generated datasets and public benchmark downloads are kept locally.
+# Use scripts/download_datasets.md and scripts/prepare_public_datasets.py
+# to recreate them instead of pushing large/raw data to GitHub.
+datasets/public/*
+datasets/realtime/*
+datasets/archive/*
+datasets/exports/*
+datasets/processed/*.csv
+datasets/models/*.pkl
+!datasets/public/.gitkeep
+!datasets/public/CICIDS2017/.gitkeep
+!datasets/public/CSE_CIC_IDS2018/.gitkeep
+!datasets/public/UNSW_NB15/.gitkeep
+!datasets/public/MAWI/.gitkeep
+!datasets/realtime/.gitkeep
+!datasets/archive/.gitkeep
+!datasets/exports/.gitkeep
+!datasets/processed/.gitkeep
+!datasets/models/.gitkeep
+!datasets/models/training_report.json
+
+# Generated verification artifacts.
+results/screenshots/
+results/dom_checks/
+results/acceptance/*.json

@@ -22,6 +22,8 @@ from ryu.controller.handler import MAIN_DISPATCHER, set_ev_cls
 from ryu.lib import hub
 from ryu.ofproto import ofproto_v1_3
 
+from tumba_sdn.common.campus_core import active_zone_dpids
+
 
 # Congestion thresholds
 CONGESTION_THRESHOLDS = {
@@ -61,6 +63,7 @@ ZONE_DPIDS = {
     'it_lab': 6,        # as3
     'student_wifi': 7,  # as4
 }
+ZONE_DPIDS = active_zone_dpids()
 
 
 class TrafficMonitor(app_manager.RyuApp):

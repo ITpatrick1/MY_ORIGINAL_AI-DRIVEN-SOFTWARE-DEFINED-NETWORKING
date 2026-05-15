@@ -38,11 +38,15 @@ import threading
 from collections import deque
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from tumba_sdn.common.campus_core import atomic_write_json, configure_file_logger
+
 METRICS_FILE    = os.environ.get('CAMPUS_METRICS_FILE',    '/tmp/campus_metrics.json')
 BASELINE_FILE   = os.environ.get('CAMPUS_BASELINE_FILE',   '/tmp/campus_baseline.json')
 HISTORY_OUT     = os.environ.get('CAMPUS_DM_FILE',         '/tmp/campus_data_mining.json')
+STATE_FILE      = os.environ.get('CAMPUS_DM_STATE_FILE',   '/tmp/campus_data_mining_state.json')
 RESULTS_DIR     = os.path.join(os.path.dirname(__file__), '..', '..', 'results')
 DEFAULT_PORT    = int(os.environ.get('CAMPUS_DM_PORT', '9099'))
+LOGGER = configure_file_logger('tumba.data_mining', 'data_mining.log')
 
 ZONES = ['staff_lan', 'server_zone', 'it_lab', 'student_wifi']
 
@@ -120,11 +124,7 @@ def _read(path: str) -> dict:
 
 
 def _write(path: str, data: dict) -> None:
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + '.tmp'
-    with open(tmp, 'w') as f:
-        json.dump(data, f, indent=2)
-    os.replace(tmp, path)
+    atomic_write_json(path, data, logger=LOGGER, label='data_mining')
 
 
 def _sf(v, d=0.0) -> float:
@@ -603,6 +603,7 @@ def build_report() -> dict:
 # ── Background sampler ─────────────────────────────────────────────────────────
 
 def _sample_loop(interval: float = 10.0) -> None:
+    LOGGER.info('sample loop started interval=%ss', interval)
     while True:
         m = _read(METRICS_FILE)
         if m:
@@ -615,11 +616,25 @@ def _sample_loop(interval: float = 10.0) -> None:
 
 def _report_loop(interval: float = 30.0) -> None:
     time.sleep(15)   # allow initial samples to accumulate
+    LOGGER.info('report loop started interval=%ss', interval)
     while True:
         report = build_report()
         _write(HISTORY_OUT, report)
+        atomic_write_json(
+            STATE_FILE,
+            {
+                'ts': time.time(),
+                'samples': len(_ts_buffer),
+                'report_file': HISTORY_OUT,
+                'report_exists': os.path.exists(HISTORY_OUT),
+                'results_markdown': os.path.join(RESULTS_DIR, 'data_mining_ts.md'),
+            },
+            logger=LOGGER,
+            label='data_mining_state',
+        )
         # Write markdown summary once per session
         _write_markdown(report)
+        LOGGER.info('report written samples=%d report=%s state=%s', len(_ts_buffer), HISTORY_OUT, STATE_FILE)
         time.sleep(interval)
 
 
@@ -690,7 +705,8 @@ class DMHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         if self.path == '/health':
             self._json({'ok': True, 'service': 'data_mining',
-                        'samples': len(_ts_buffer), 'ts': time.time()})
+                        'samples': len(_ts_buffer), 'ts': time.time(),
+                        'state_file': STATE_FILE, 'state_exists': os.path.exists(STATE_FILE)})
         elif self.path == '/report':
             self._json(build_report())
         elif self.path == '/timeseries':
@@ -714,21 +730,31 @@ def main() -> None:
     p.add_argument('--report-interval', type=float, default=30.0)
     args = p.parse_args()
 
+    atomic_write_json(
+        STATE_FILE,
+        {
+            'ts': time.time(),
+            'samples': 0,
+            'report_file': HISTORY_OUT,
+            'report_exists': os.path.exists(HISTORY_OUT),
+            'results_markdown': os.path.join(RESULTS_DIR, 'data_mining_ts.md'),
+        },
+        logger=LOGGER,
+        label='data_mining_state_init',
+    )
+
     threading.Thread(target=_sample_loop,
                      args=(args.sample_interval,), daemon=True).start()
     threading.Thread(target=_report_loop,
                      args=(args.report_interval,), daemon=True).start()
 
     server = ThreadingHTTPServer(('0.0.0.0', args.port), DMHandler)
-    print(f"Data Mining Engine on http://0.0.0.0:{args.port}")
-    print(f"  GET /report   — full report")
-    print(f"  GET /kpis     — performance KPIs")
-    print(f"  GET /gap      — gap analysis")
-    print(f"  GET /clusters — K-Means clusters")
+    LOGGER.info('startup host=0.0.0.0 port=%s state_file=%s report_file=%s', args.port, STATE_FILE, HISTORY_OUT)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
+    LOGGER.info('shutdown')
 
 
 if __name__ == '__main__':

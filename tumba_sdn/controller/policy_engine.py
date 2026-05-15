@@ -22,20 +22,17 @@ from ryu.lib import hub
 from ryu.lib.packet import ether_types
 from ryu.ofproto import ofproto_v1_3
 
+from tumba_sdn.common.campus_core import active_zone_dpids, active_zone_subnets, active_zone_switches
 
 # DPID mapping for the campus topology
 DPID_MAP = {
     'cs1': 1, 'ds1': 2, 'ds2': 3,
     'as1': 4, 'as2': 5, 'as3': 6, 'as4': 7,
 }
+DPID_MAP.update({switch: active_zone_dpids().get(zone, 0) for zone, switch in active_zone_switches().items() if switch})
 
 # Zone subnet mapping
-ZONE_SUBNETS = {
-    'staff_lan':    '10.10.0.0/24',
-    'server_zone':  '10.20.0.0/24',
-    'it_lab':       '10.30.0.0/24',
-    'student_wifi': '10.40.0.0/24',
-}
+ZONE_SUBNETS = {zone: f'{prefix}0/24' for zone, prefix in active_zone_subnets().items()}
 
 # Server IPs
 MIS_IP = '10.20.0.1'

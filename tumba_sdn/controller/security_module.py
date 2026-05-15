@@ -23,16 +23,15 @@ from ryu.lib import hub
 from ryu.lib.packet import packet, ethernet, ipv4, tcp, udp, ether_types
 from ryu.ofproto import ofproto_v1_3
 
+from tumba_sdn.common.campus_core import active_zone_dpids, active_zone_subnets
 
 SECURITY_COOKIE = 0xCAFE5001
 DDOS_COOKIE = 0xCAFE7001
 
 # Zone subnet ranges
 ZONE_SUBNETS = {
-    'staff_lan':    ('10.10.0.', 4),
-    'server_zone':  ('10.20.0.', 5),
-    'it_lab':       ('10.30.0.', 6),
-    'student_wifi': ('10.40.0.', 7),
+    zone: (prefix, active_zone_dpids().get(zone, 0))
+    for zone, prefix in active_zone_subnets().items()
 }
 
 
